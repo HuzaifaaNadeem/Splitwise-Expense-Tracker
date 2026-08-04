@@ -1,0 +1,16 @@
+name: local_database
+description: Internal Isar schemas for Splitwise Expense Tracker.
+publish_to: none
+
+version: 0.1.0
+
+environment:
+  sdk: ">=3.12.0 <4.0.0"
+
+dependencies:
+  isar_community: 3.3.2
+
+dev_dependencies:
+  build_runner: 2.15.3
+  isar_community_generator: 3.3.2
+  lints: 6.1.0

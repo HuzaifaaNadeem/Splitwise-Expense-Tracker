@@ -1,9 +1,8 @@
-include: package:flutter_lints/flutter.yaml
+include: package:lints/recommended.yaml
 
 analyzer:
   exclude:
     - "**/*.g.dart"
-    - "**/*.freezed.dart"
 
   language:
     strict-casts: true
@@ -12,8 +11,6 @@ analyzer:
 
   errors:
     invalid_assignment: error
-    missing_required_param: error
-    missing_return: error
     todo: warning
     unused_import: error
     unused_local_variable: error
@@ -23,11 +20,6 @@ linter:
     always_declare_return_types: true
     avoid_dynamic_calls: true
     avoid_print: true
-    cancel_subscriptions: true
-    close_sinks: true
     directives_ordering: true
-    discarded_futures: true
     prefer_final_locals: true
     prefer_single_quotes: true
-    unawaited_futures: true
-    use_super_parameters: true
