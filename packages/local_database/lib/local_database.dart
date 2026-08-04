@@ -1,4 +1,6 @@
-/// Public exports for the application's local persistence models.
-///
-/// Isar schemas will be exported from this library in the next checkpoint.
 library local_database;
+
+export 'src/database_schemas.dart';
+export 'src/models/expense_model.dart';
+export 'src/models/group_model.dart';
+export 'src/models/group_split_model.dart';
