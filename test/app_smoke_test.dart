@@ -1,13 +1,17 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:splitwise_expense_tracker/main.dart';
+import 'package:splitwise_expense_tracker/app/app.dart';
 
 void main() {
-  testWidgets('application starts successfully', (WidgetTester tester) async {
-    await tester.pumpWidget(const ExpenseTrackerApp());
+  testWidgets('application shell starts successfully', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: ExpenseTrackerApp()));
+
     await tester.pumpAndSettle();
 
-    expect(find.text('Project foundation is ready'), findsOneWidget);
-
-    expect(find.text('Split Expense Tracker'), findsOneWidget);
+    expect(find.text('Dashboard'), findsWidgets);
+    expect(find.text('Financial overview'), findsOneWidget);
+    expect(find.text('PKR 0'), findsWidgets);
   });
 }
