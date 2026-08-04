@@ -1,19 +1,58 @@
 name: splitwise_expense_tracker
-description: "A new Flutter project."
-publish_to: 'none'
+description: Production-grade offline-first expense and debt settlement app.
+publish_to: none
+
 version: 0.1.0+1
 
 environment:
-  sdk: ^3.12.2
+  sdk: ">=3.12.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
 
+  cupertino_icons: 1.0.8
+
+  # State management
+  flutter_riverpod: 2.6.1
+  riverpod_annotation: 2.6.1
+
+  # Local persistence
+  isar_community: 3.3.2
+  isar_community_flutter_libs: 3.3.2
+  local_database:
+    path: packages/local_database
+
+  # Data visualization
+  fl_chart: 1.2.0
+
+  # PDF generation, preview, printing, and sharing
+  pdf: 3.13.0
+  printing: 5.15.0
+
+  # File-system storage
+  path_provider: 2.1.6
+
+  # Formatting and utility packages
+  intl: 0.20.3
+  uuid: 4.6.0
+  equatable: 2.1.0
+  collection: 1.19.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
+
+  integration_test:
+    sdk: flutter
+
+  # Riverpod code generation
+  build_runner: 2.5.4
+  riverpod_generator: 2.6.5
+
+  # Testing and analysis
+  flutter_lints: 6.0.0
+  mocktail: 1.0.5
 
 flutter:
   uses-material-design: true
