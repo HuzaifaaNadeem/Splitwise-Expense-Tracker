@@ -10,6 +10,12 @@ import '../constants/database_constants.dart';
 final class DatabaseService {
   DatabaseService._(this.isar);
 
+  /// Creates a database service around an already-open Isar instance.
+  ///
+  /// Intended for automated tests where the database is opened in a
+  /// temporary directory.
+  DatabaseService.forTesting(this.isar);
+
   static Future<DatabaseService>? _openingFuture;
 
   final Isar isar;
