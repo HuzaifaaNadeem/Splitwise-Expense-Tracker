@@ -19,40 +19,35 @@ final class DebtSettlementCalculator {
     final List<DebtSettlement> settlements = <DebtSettlement>[];
 
     while (true) {
-      final MapEntry<String, int>? largestCreditor = _findLargestCreditor(
+      final MapEntry<String, int>? creditor = _findLargestCreditor(
         remainingBalances,
       );
 
-      final MapEntry<String, int>? largestDebtor = _findLargestDebtor(
+      final MapEntry<String, int>? debtor = _findLargestDebtor(
         remainingBalances,
       );
 
-      if (largestCreditor == null || largestDebtor == null) {
+      if (creditor == null || debtor == null) {
         break;
       }
 
-      final int amountToTransfer = _minimum(
-        largestCreditor.value,
-        -largestDebtor.value,
-      );
+      final int transferAmount = _minimum(creditor.value, -debtor.value);
 
-      if (amountToTransfer <= 0) {
+      if (transferAmount <= 0) {
         break;
       }
 
       settlements.add(
         DebtSettlement(
-          fromMemberId: largestDebtor.key,
-          toMemberId: largestCreditor.key,
-          amountMinor: amountToTransfer,
+          fromMemberId: debtor.key,
+          toMemberId: creditor.key,
+          amountMinor: transferAmount,
         ),
       );
 
-      remainingBalances[largestCreditor.key] =
-          largestCreditor.value - amountToTransfer;
+      remainingBalances[creditor.key] = creditor.value - transferAmount;
 
-      remainingBalances[largestDebtor.key] =
-          largestDebtor.value + amountToTransfer;
+      remainingBalances[debtor.key] = debtor.value + transferAmount;
     }
 
     _verifySettlementComplete(remainingBalances);
@@ -62,16 +57,17 @@ final class DebtSettlementCalculator {
 
   void _validateBalances(List<MemberBalance> balances) {
     final Set<String> memberIds = <String>{};
-
     int total = 0;
 
     for (final MemberBalance balance in balances) {
-      if (balance.memberId.trim().isEmpty) {
+      final String memberId = balance.memberId.trim();
+
+      if (memberId.isEmpty) {
         throw const FormatException('Member id cannot be empty.');
       }
 
-      if (!memberIds.add(balance.memberId)) {
-        throw FormatException('Duplicate member id: ${balance.memberId}');
+      if (!memberIds.add(memberId)) {
+        throw FormatException('Duplicate member id: $memberId');
       }
 
       total += balance.balanceMinor;
@@ -79,7 +75,8 @@ final class DebtSettlementCalculator {
 
     if (total != 0) {
       throw StateError(
-        'Group balances must sum to zero. Current total: $total',
+        'Group balances must sum to zero. '
+        'Current total: $total',
       );
     }
   }

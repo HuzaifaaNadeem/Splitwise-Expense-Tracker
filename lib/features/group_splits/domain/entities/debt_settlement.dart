@@ -8,9 +8,7 @@ final class DebtSettlement extends Equatable {
   });
 
   final String fromMemberId;
-
   final String toMemberId;
-
   final int amountMinor;
 
   @override

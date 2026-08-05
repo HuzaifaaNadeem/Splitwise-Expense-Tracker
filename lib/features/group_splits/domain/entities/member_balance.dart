@@ -5,11 +5,9 @@ final class MemberBalance extends Equatable {
 
   final String memberId;
 
-  /// Positive = member should receive money.
-  ///
-  /// Negative = member owes money.
-  ///
-  /// Zero = already settled.
+  /// Positive: this member should receive money.
+  /// Negative: this member owes money.
+  /// Zero: this member is settled.
   final int balanceMinor;
 
   @override

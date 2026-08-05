@@ -80,7 +80,7 @@ void main() {
       );
     });
 
-    test('handles several creditors and debtors', () {
+    test('handles multiple creditors and debtors', () {
       final List<DebtSettlement> result = calculator
           .calculate(const <MemberBalance>[
             MemberBalance(memberId: 'a', balanceMinor: -7000),
@@ -100,7 +100,7 @@ void main() {
       expect(result.length, lessThanOrEqualTo(3));
     });
 
-    test('rejects balances that do not sum to zero', () {
+    test('rejects balances which do not sum to zero', () {
       expect(
         () => calculator.calculate(const <MemberBalance>[
           MemberBalance(memberId: 'ali', balanceMinor: -10000),
