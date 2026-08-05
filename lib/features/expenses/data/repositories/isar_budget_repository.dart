@@ -49,13 +49,35 @@ final class IsarBudgetRepository implements BudgetRepository {
 
   @override
   Future<Result<Budget>> save(Budget budget) async {
-    final ValidationFailure? failure = _validate(budget);
+    final ValidationFailure? basicFailure = _validate(budget);
 
-    if (failure != null) {
-      return FailureResult<Budget>(failure);
+    if (basicFailure != null) {
+      return FailureResult<Budget>(basicFailure);
     }
 
     try {
+      final BudgetPeriod oppositePeriod = budget.period == BudgetPeriod.weekly
+          ? BudgetPeriod.monthly
+          : BudgetPeriod.weekly;
+
+      final oppositeModel = await localDataSource.findByPeriod(
+        _toDatabasePeriod(oppositePeriod),
+      );
+
+      if (oppositeModel != null) {
+        final Budget oppositeBudget = BudgetMapper.toDomain(oppositeModel);
+
+        final ValidationFailure? relationshipFailure =
+            _validateBudgetRelationship(
+              budget: budget,
+              oppositeBudget: oppositeBudget,
+            );
+
+        if (relationshipFailure != null) {
+          return FailureResult<Budget>(relationshipFailure);
+        }
+      }
+
       final existing = await localDataSource.findByPeriod(
         _toDatabasePeriod(budget.period),
       );
@@ -130,6 +152,38 @@ final class IsarBudgetRepository implements BudgetRepository {
     if (budget.currencyScale < 0 || budget.currencyScale > 3) {
       return const ValidationFailure(
         message: 'Currency scale must be between 0 and 3.',
+      );
+    }
+
+    return null;
+  }
+
+  ValidationFailure? _validateBudgetRelationship({
+    required Budget budget,
+    required Budget oppositeBudget,
+  }) {
+    final String budgetCurrency = budget.currencyCode.toUpperCase();
+
+    final String oppositeCurrency = oppositeBudget.currencyCode.toUpperCase();
+
+    if (budgetCurrency != oppositeCurrency ||
+        budget.currencyScale != oppositeBudget.currencyScale) {
+      return const ValidationFailure(
+        message: 'Weekly and monthly budgets must use the same currency.',
+      );
+    }
+
+    if (budget.period == BudgetPeriod.weekly &&
+        budget.amountMinor > oppositeBudget.amountMinor) {
+      return const ValidationFailure(
+        message: 'Weekly budget cannot exceed the monthly budget.',
+      );
+    }
+
+    if (budget.period == BudgetPeriod.monthly &&
+        budget.amountMinor < oppositeBudget.amountMinor) {
+      return const ValidationFailure(
+        message: 'Monthly budget cannot be lower than the weekly budget.',
       );
     }
 

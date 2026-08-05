@@ -10,6 +10,7 @@ import '../../domain/entities/expense.dart';
 import '../controllers/expense_controller.dart';
 import '../models/expense_category_option.dart';
 import 'expense_form_screen.dart';
+import 'expense_settings_screen.dart';
 
 class ExpensesScreen extends ConsumerWidget {
   const ExpensesScreen({super.key});
@@ -47,6 +48,9 @@ class ExpensesScreen extends ConsumerWidget {
               onAddExpense: () {
                 unawaited(_openExpenseForm(context));
               },
+              onManageSettings: () {
+                unawaited(_openExpenseSettings(context));
+              },
             );
           }
 
@@ -57,12 +61,13 @@ class ExpensesScreen extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),
               children: <Widget>[
-                Text(
-                  '${values.length} '
-                  '${values.length == 1 ? 'expense' : 'expenses'}',
-                  style: Theme.of(context).textTheme.titleMedium,
+                _ExpensesHeader(
+                  expenseCount: values.length,
+                  onManageSettings: () {
+                    unawaited(_openExpenseSettings(context));
+                  },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
                 for (final Expense expense in values)
                   _ExpenseCard(
                     expense: expense,
@@ -89,6 +94,16 @@ class ExpensesScreen extends ConsumerWidget {
       MaterialPageRoute<bool>(
         builder: (BuildContext context) {
           return ExpenseFormScreen(expense: expense);
+        },
+      ),
+    );
+  }
+
+  Future<void> _openExpenseSettings(BuildContext context) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) {
+          return const ExpenseSettingsScreen();
         },
       ),
     );
@@ -153,6 +168,40 @@ class ExpensesScreen extends ConsumerWidget {
   }
 }
 
+class _ExpensesHeader extends StatelessWidget {
+  const _ExpensesHeader({
+    required this.expenseCount,
+    required this.onManageSettings,
+  });
+
+  final int expenseCount;
+  final VoidCallback onManageSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 16,
+      runSpacing: 12,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      alignment: WrapAlignment.spaceBetween,
+      children: <Widget>[
+        Text(
+          '$expenseCount '
+          '${expenseCount == 1 ? 'expense' : 'expenses'}',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        OutlinedButton.icon(
+          onPressed: onManageSettings,
+          icon: const Icon(Icons.tune_outlined),
+          label: const Text('Budgets & Categories'),
+        ),
+      ],
+    );
+  }
+}
+
 class _ExpenseCard extends StatelessWidget {
   const _ExpenseCard({
     required this.expense,
@@ -195,15 +244,19 @@ class _ExpenseCard extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Text(
-              MoneyUtils.formatMinorUnits(
-                expense.amountMinor,
-                currencyCode: expense.currencyCode,
-                scale: expense.currencyScale,
-              ),
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: colors.error,
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 150),
+              child: Text(
+                MoneyUtils.formatMinorUnits(
+                  expense.amountMinor,
+                  currencyCode: expense.currencyCode,
+                  scale: expense.currencyScale,
+                ),
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: colors.error,
+                ),
               ),
             ),
             PopupMenuButton<String>(
@@ -216,8 +269,22 @@ class _ExpenseCard extends StatelessWidget {
               },
               itemBuilder: (BuildContext context) {
                 return const <PopupMenuEntry<String>>[
-                  PopupMenuItem<String>(value: 'edit', child: Text('Edit')),
-                  PopupMenuItem<String>(value: 'delete', child: Text('Delete')),
+                  PopupMenuItem<String>(
+                    value: 'edit',
+                    child: ListTile(
+                      leading: Icon(Icons.edit_outlined),
+                      title: Text('Edit'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'delete',
+                    child: ListTile(
+                      leading: Icon(Icons.delete_outline),
+                      title: Text('Delete'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
                 ];
               },
             ),
@@ -229,36 +296,58 @@ class _ExpenseCard extends StatelessWidget {
 }
 
 class _EmptyExpenses extends StatelessWidget {
-  const _EmptyExpenses({required this.onAddExpense});
+  const _EmptyExpenses({
+    required this.onAddExpense,
+    required this.onManageSettings,
+  });
 
   final VoidCallback onAddExpense;
+  final VoidCallback onManageSettings;
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            const Icon(Icons.receipt_long_outlined, size: 72),
-            const SizedBox(height: 20),
-            Text(
-              'No expenses yet',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Add your first expense and it will be saved locally on this device.',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: onAddExpense,
-              icon: const Icon(Icons.add),
-              label: const Text('Add Expense'),
-            ),
-          ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const Icon(Icons.receipt_long_outlined, size: 72),
+              const SizedBox(height: 20),
+              Text(
+                'No expenses yet',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Add your first expense and it will be saved locally '
+                'on this device.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.center,
+                children: <Widget>[
+                  FilledButton.icon(
+                    onPressed: onAddExpense,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Expense'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onManageSettings,
+                    icon: const Icon(Icons.tune_outlined),
+                    label: const Text('Budgets & Categories'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -283,7 +372,9 @@ class _ErrorState extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               'Could not load expenses',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(message, textAlign: TextAlign.center),

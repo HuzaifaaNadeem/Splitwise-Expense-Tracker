@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/result.dart';
 import '../../../../core/utils/money_utils.dart';
 import '../../domain/entities/expense.dart';
+import '../../domain/entities/expense_category.dart';
+import '../controllers/category_controller.dart';
 import '../controllers/expense_controller.dart';
-import '../models/expense_category_option.dart';
+import '../models/category_visuals.dart';
 
 class ExpenseFormScreen extends ConsumerStatefulWidget {
   const ExpenseFormScreen({this.expense, super.key});
@@ -72,6 +74,10 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AsyncValue<List<ExpenseCategory>> categories = ref.watch(
+      categoryControllerProvider,
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.isEditing ? 'Edit Expense' : 'Add Expense'),
@@ -150,34 +156,63 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: _categoryId,
-                decoration: const InputDecoration(
-                  labelText: 'Category',
-                  prefixIcon: Icon(Icons.category_outlined),
-                ),
-                items: defaultExpenseCategories
-                    .map((ExpenseCategoryOption category) {
-                      return DropdownMenuItem<String>(
-                        value: category.id,
-                        child: Row(
-                          children: <Widget>[
-                            Icon(category.icon, size: 20),
-                            const SizedBox(width: 12),
-                            Text(category.label),
-                          ],
-                        ),
-                      );
-                    })
-                    .toList(growable: false),
-                onChanged: (String? value) {
-                  if (value == null) {
-                    return;
+              categories.when(
+                loading: () => const LinearProgressIndicator(),
+                error: (Object error, StackTrace stackTrace) {
+                  return const Text('Could not load categories.');
+                },
+                data: (List<ExpenseCategory> values) {
+                  if (values.isEmpty) {
+                    return const Text('No categories are available.');
                   }
 
-                  setState(() {
-                    _categoryId = value;
-                  });
+                  final String effectiveCategory =
+                      values.any(
+                        (ExpenseCategory category) =>
+                            category.id == _categoryId,
+                      )
+                      ? _categoryId
+                      : values.first.id;
+
+                  return DropdownButtonFormField<String>(
+                    key: ValueKey<String>(
+                      'category-$effectiveCategory-${values.length}',
+                    ),
+                    initialValue: effectiveCategory,
+                    decoration: const InputDecoration(
+                      labelText: 'Category',
+                      prefixIcon: Icon(Icons.category_outlined),
+                    ),
+                    items: values
+                        .map((ExpenseCategory category) {
+                          return DropdownMenuItem<String>(
+                            value: category.id,
+                            child: Row(
+                              children: <Widget>[
+                                Icon(
+                                  categoryIconFromCodePoint(
+                                    category.iconCodePoint,
+                                  ),
+                                  color: Color(category.colorValue),
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                Text(category.name),
+                              ],
+                            ),
+                          );
+                        })
+                        .toList(growable: false),
+                    onChanged: (String? value) {
+                      if (value == null) {
+                        return;
+                      }
+
+                      setState(() {
+                        _categoryId = value;
+                      });
+                    },
+                  );
                 },
               ),
               const SizedBox(height: 16),
@@ -294,6 +329,19 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
       return;
     }
 
+    final List<ExpenseCategory> categories =
+        ref.read(categoryControllerProvider).value ?? const <ExpenseCategory>[];
+
+    if (categories.isEmpty) {
+      _showError('No expense category is available.');
+      return;
+    }
+
+    final String categoryId =
+        categories.any((ExpenseCategory category) => category.id == _categoryId)
+        ? _categoryId
+        : categories.first.id;
+
     final int? amountMinor = MoneyUtils.parseToMinorUnits(
       _amountController.text,
       scale: _currencyScale,
@@ -318,7 +366,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
             amountMinor: amountMinor,
             currencyCode: _currencyCode,
             currencyScale: _currencyScale,
-            categoryId: _categoryId,
+            categoryId: categoryId,
             occurredAt: _occurredAtLocal,
             notes: _notesController.text,
           );
@@ -331,7 +379,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
             amountMinor: amountMinor,
             currencyCode: _currencyCode,
             currencyScale: _currencyScale,
-            categoryId: _categoryId,
+            categoryId: categoryId,
             occurredAt: _occurredAtLocal,
             notes: _notesController.text,
           );
@@ -362,7 +410,11 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   }
 
   String _editableAmount(Expense expense) {
-    final int divisor = _powerOfTen(expense.currencyScale);
+    int divisor = 1;
+
+    for (int index = 0; index < expense.currencyScale; index++) {
+      divisor *= 10;
+    }
 
     final int whole = expense.amountMinor ~/ divisor;
 
@@ -374,15 +426,5 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
 
     return '$whole.'
         '${fraction.toString().padLeft(expense.currencyScale, '0')}';
-  }
-
-  int _powerOfTen(int exponent) {
-    int result = 1;
-
-    for (int index = 0; index < exponent; index++) {
-      result *= 10;
-    }
-
-    return result;
   }
 }

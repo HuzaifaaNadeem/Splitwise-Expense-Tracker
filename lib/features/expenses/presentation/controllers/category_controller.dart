@@ -53,6 +53,27 @@ class CategoryController extends _$CategoryController {
     return result;
   }
 
+  Future<Result<ExpenseCategory>> updateCategory({
+    required ExpenseCategory existing,
+    required String name,
+    required int iconCodePoint,
+    required int colorValue,
+  }) async {
+    final ExpenseCategory updated = existing.copyWith(
+      name: name,
+      iconCodePoint: iconCodePoint,
+      colorValue: colorValue,
+    );
+
+    final result = await ref.read(categoryRepositoryProvider).update(updated);
+
+    if (result.isSuccess) {
+      await refresh();
+    }
+
+    return result;
+  }
+
   Future<Result<bool>> deleteCategory(String id) async {
     final result = await ref.read(categoryRepositoryProvider).delete(id);
 
