@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,18 +23,18 @@ class GroupDetailsScreen extends ConsumerWidget {
         actions: [
           groupAsync.when(
             loading: () => const SizedBox.shrink(),
-            error: (_, _) => const SizedBox.shrink(),
+            error: (Object _, StackTrace _) => const SizedBox.shrink(),
             data: (Group? group) {
               if (group == null) {
                 return const SizedBox.shrink();
               }
 
               return PopupMenuButton<String>(
-                onSelected: (String value) async {
+                onSelected: (String value) {
                   if (value == 'archive') {
-                    await _showArchiveDialog(context, ref, group);
+                    unawaited(_showArchiveDialog(context, ref, group));
                   } else if (value == 'delete') {
-                    await _showDeleteDialog(context, ref, group);
+                    unawaited(_showDeleteDialog(context, ref, group));
                   }
                 },
                 itemBuilder: (BuildContext context) {
@@ -77,11 +79,11 @@ class GroupDetailsScreen extends ConsumerWidget {
 
           return _GroupDetailsContent(
             group: group,
-            onArchive: () async {
-              await _showArchiveDialog(context, ref, group);
+            onArchive: () {
+              unawaited(_showArchiveDialog(context, ref, group));
             },
-            onDelete: () async {
-              await _showDeleteDialog(context, ref, group);
+            onDelete: () {
+              unawaited(_showDeleteDialog(context, ref, group));
             },
           );
         },
@@ -105,11 +107,15 @@ class GroupDetailsScreen extends ConsumerWidget {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
               child: const Text('Archive'),
             ),
           ],
@@ -131,6 +137,7 @@ class GroupDetailsScreen extends ConsumerWidget {
 
     if (success) {
       Navigator.of(context).pop();
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Group archived successfully.')),
       );
@@ -155,7 +162,9 @@ class GroupDetailsScreen extends ConsumerWidget {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
               child: const Text('Cancel'),
             ),
             FilledButton(
@@ -163,7 +172,9 @@ class GroupDetailsScreen extends ConsumerWidget {
                 backgroundColor: Theme.of(context).colorScheme.error,
                 foregroundColor: Theme.of(context).colorScheme.onError,
               ),
-              onPressed: () => Navigator.of(dialogContext).pop(true),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
               child: const Text('Delete'),
             ),
           ],
@@ -185,6 +196,7 @@ class GroupDetailsScreen extends ConsumerWidget {
 
     if (success) {
       Navigator.of(context).pop();
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Group deleted successfully.')),
       );
@@ -219,8 +231,8 @@ class _GroupDetailsContent extends StatelessWidget {
   });
 
   final Group group;
-  final Future<void> Function() onArchive;
-  final Future<void> Function() onDelete;
+  final VoidCallback onArchive;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -329,17 +341,13 @@ class _GroupDetailsContent extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
-          onPressed: () async {
-            await onArchive();
-          },
+          onPressed: onArchive,
           icon: const Icon(Icons.archive_outlined),
           label: const Text('Archive group'),
         ),
         const SizedBox(height: 10),
         OutlinedButton.icon(
-          onPressed: () async {
-            await onDelete();
-          },
+          onPressed: onDelete,
           icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
           label: Text(
             'Delete group',
@@ -442,6 +450,7 @@ class _MemberTile extends StatelessWidget {
 
   Color _textColorForBackground(int colorValue) {
     final Color color = Color(colorValue);
+
     return color.computeLuminance() > 0.5 ? Colors.black : Colors.white;
   }
 }
