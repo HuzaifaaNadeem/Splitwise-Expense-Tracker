@@ -3,9 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/entities/debt_settlement.dart';
 import '../../domain/entities/group.dart';
 import '../../domain/entities/group_member.dart';
 import '../../domain/entities/group_split.dart';
+import '../../domain/entities/member_balance.dart';
+import '../../domain/services/debt_settlement_calculator.dart';
+import '../../domain/services/group_balance_calculator.dart';
 import '../providers/group_controller.dart';
 import '../providers/group_providers.dart';
 import '../providers/group_split_controller.dart';
@@ -204,8 +208,7 @@ class GroupDetailsScreen extends ConsumerWidget {
           title: const Text('Archive group?'),
           content: Text(
             '“${group.name}” will be removed from your '
-            'active groups. Its data will remain available '
-            'for existing records.',
+            'active groups. Existing records will remain.',
           ),
           actions: [
             TextButton(
@@ -377,13 +380,10 @@ class _GroupDetailsContent extends StatelessWidget {
         if (group.description != null &&
             group.description!.trim().isNotEmpty) ...[
           const SizedBox(height: 8),
-          Text(
-            group.description!,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyLarge,
-          ),
+          Text(group.description!, textAlign: TextAlign.center),
         ],
         const SizedBox(height: 24),
+
         Card(
           child: Column(
             children: [
@@ -407,7 +407,9 @@ class _GroupDetailsContent extends StatelessWidget {
             ],
           ),
         ),
+
         const SizedBox(height: 28),
+
         Row(
           children: [
             Expanded(
@@ -427,7 +429,9 @@ class _GroupDetailsContent extends StatelessWidget {
             ),
           ],
         ),
+
         const SizedBox(height: 12),
+
         splitsAsync.when(
           loading: () => const Card(
             child: Padding(
@@ -485,14 +489,48 @@ class _GroupDetailsContent extends StatelessWidget {
             );
           },
         ),
+
         const SizedBox(height: 28),
+
+        Text(
+          'Balances & settlements',
+          key: const Key('group_balances_heading'),
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        splitsAsync.when(
+          loading: () => const Card(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ),
+          error: (Object error, StackTrace stackTrace) => Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text('Unable to calculate balances: $error'),
+            ),
+          ),
+          data: (List<GroupSplit> splits) {
+            return _GroupFinanceSummary(group: group, splits: splits);
+          },
+        ),
+
+        const SizedBox(height: 28),
+
         Text(
           'Members',
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
+
         const SizedBox(height: 12),
+
         Card(
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -505,20 +543,26 @@ class _GroupDetailsContent extends StatelessWidget {
             ],
           ),
         ),
+
         const SizedBox(height: 32),
+
         Text(
           'Group actions',
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
+
         const SizedBox(height: 12),
+
         OutlinedButton.icon(
           onPressed: onArchive,
           icon: const Icon(Icons.archive_outlined),
           label: const Text('Archive group'),
         ),
+
         const SizedBox(height: 10),
+
         OutlinedButton.icon(
           onPressed: onDelete,
           icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
@@ -540,6 +584,217 @@ class _GroupDetailsContent extends StatelessWidget {
   }
 }
 
+class _GroupFinanceSummary extends StatelessWidget {
+  const _GroupFinanceSummary({required this.group, required this.splits});
+
+  final Group group;
+  final List<GroupSplit> splits;
+
+  static const GroupBalanceCalculator _balanceCalculator =
+      GroupBalanceCalculator();
+
+  static const DebtSettlementCalculator _settlementCalculator =
+      DebtSettlementCalculator();
+
+  @override
+  Widget build(BuildContext context) {
+    final List<String> memberIds = group.members
+        .map((GroupMember member) => member.id)
+        .toList(growable: false);
+
+    try {
+      final List<MemberBalance> balances = _balanceCalculator.calculate(
+        memberIds: memberIds,
+        splits: splits,
+      );
+
+      final List<DebtSettlement> settlements = _settlementCalculator.calculate(
+        balances,
+      );
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _BalancesCard(group: group, balances: balances),
+          const SizedBox(height: 12),
+          _SettlementsCard(group: group, settlements: settlements),
+        ],
+      );
+    } on Object catch (error) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.error_outline),
+              const SizedBox(width: 12),
+              Expanded(child: Text('Unable to calculate balances: $error')),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+}
+
+class _BalancesCard extends StatelessWidget {
+  const _BalancesCard({required this.group, required this.balances});
+
+  final Group group;
+  final List<MemberBalance> balances;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      key: const Key('group_balances_card'),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          const ListTile(
+            leading: Icon(Icons.account_balance_wallet_outlined),
+            title: Text(
+              'Net balances',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          const Divider(height: 1),
+          for (int index = 0; index < balances.length; index++) ...[
+            _BalanceTile(group: group, balance: balances[index]),
+            if (index < balances.length - 1)
+              const Divider(height: 1, indent: 16, endIndent: 16),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BalanceTile extends StatelessWidget {
+  const _BalanceTile({required this.group, required this.balance});
+
+  final Group group;
+  final MemberBalance balance;
+
+  @override
+  Widget build(BuildContext context) {
+    final GroupMember? member = _findMember(group, balance.memberId);
+
+    final String name = member?.displayName ?? 'Unknown member';
+
+    final bool isCurrentUser = member?.isCurrentUser ?? false;
+
+    final int amount = balance.balanceMinor.abs();
+
+    final String status;
+
+    if (balance.balanceMinor > 0) {
+      status = isCurrentUser ? 'You are owed' : 'Is owed';
+    } else if (balance.balanceMinor < 0) {
+      status = isCurrentUser ? 'You owe' : 'Owes';
+    } else {
+      status = 'Settled';
+    }
+
+    return ListTile(
+      title: Text(isCurrentUser ? '$name (You)' : name),
+      subtitle: Text(status),
+      trailing: balance.balanceMinor == 0
+          ? const Icon(Icons.check_circle_outline)
+          : Text(
+              '${group.defaultCurrencyCode} '
+              '${_formatMinorAmount(amount, group.defaultCurrencyScale)}',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+    );
+  }
+}
+
+class _SettlementsCard extends StatelessWidget {
+  const _SettlementsCard({required this.group, required this.settlements});
+
+  final Group group;
+  final List<DebtSettlement> settlements;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      key: const Key('group_settlement_suggestions_card'),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          const ListTile(
+            leading: Icon(Icons.swap_horiz),
+            title: Text(
+              'Settlement suggestions',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Text('Suggested payments to settle group balances.'),
+          ),
+          const Divider(height: 1),
+          if (settlements.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  Icon(Icons.check_circle_outline, size: 40),
+                  SizedBox(height: 10),
+                  Text(
+                    'Everyone is settled',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            )
+          else
+            for (int index = 0; index < settlements.length; index++) ...[
+              _SettlementTile(group: group, settlement: settlements[index]),
+              if (index < settlements.length - 1)
+                const Divider(height: 1, indent: 16, endIndent: 16),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SettlementTile extends StatelessWidget {
+  const _SettlementTile({required this.group, required this.settlement});
+
+  final Group group;
+  final DebtSettlement settlement;
+
+  @override
+  Widget build(BuildContext context) {
+    final GroupMember? fromMember = _findMember(group, settlement.fromMemberId);
+
+    final GroupMember? toMember = _findMember(group, settlement.toMemberId);
+
+    final String fromName = fromMember?.isCurrentUser ?? false
+        ? 'You'
+        : fromMember?.displayName ?? 'Unknown';
+
+    final String toName = toMember?.isCurrentUser ?? false
+        ? 'You'
+        : toMember?.displayName ?? 'Unknown';
+
+    return ListTile(
+      leading: const CircleAvatar(child: Icon(Icons.arrow_forward)),
+      title: Text('$fromName → $toName'),
+      subtitle: const Text('Pay'),
+      trailing: Text(
+        '${group.defaultCurrencyCode} '
+        '${_formatMinorAmount(settlement.amountMinor, group.defaultCurrencyScale)}',
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+}
+
 class _GroupExpenseCard extends StatelessWidget {
   const _GroupExpenseCard({
     required this.split,
@@ -554,9 +809,7 @@ class _GroupExpenseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    final GroupMember? payer = _findMember(split.paidByMemberId);
+    final GroupMember? payer = _findMember(group, split.paidByMemberId);
 
     return Card(
       child: ListTile(
@@ -577,10 +830,11 @@ class _GroupExpenseCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              '${split.currencyCode} ${_formatAmount(split)}',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              '${split.currencyCode} '
+              '${_formatMinorAmount(split.totalAmountMinor, split.currencyScale)}',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
             PopupMenuButton<String>(
               onSelected: (String value) {
@@ -601,28 +855,6 @@ class _GroupExpenseCard extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  GroupMember? _findMember(String memberId) {
-    for (final GroupMember member in group.members) {
-      if (member.id == memberId) {
-        return member;
-      }
-    }
-
-    return null;
-  }
-
-  String _formatAmount(GroupSplit split) {
-    int divisor = 1;
-
-    for (int index = 0; index < split.currencyScale; index++) {
-      divisor *= 10;
-    }
-
-    final double amount = split.totalAmountMinor / divisor;
-
-    return amount.toStringAsFixed(split.currencyScale);
   }
 
   String _formatDate(DateTime date) {
@@ -734,4 +966,35 @@ class _NotFoundState extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Center(child: Text('Group not found.'));
   }
+}
+
+GroupMember? _findMember(Group group, String memberId) {
+  for (final GroupMember member in group.members) {
+    if (member.id == memberId) {
+      return member;
+    }
+  }
+
+  return null;
+}
+
+String _formatMinorAmount(int amountMinor, int scale) {
+  final int absoluteAmount = amountMinor.abs();
+
+  int divisor = 1;
+
+  for (int index = 0; index < scale; index++) {
+    divisor *= 10;
+  }
+
+  final int whole = absoluteAmount ~/ divisor;
+
+  if (scale == 0) {
+    return whole.toString();
+  }
+
+  final int fraction = absoluteAmount % divisor;
+
+  return '$whole.'
+      '${fraction.toString().padLeft(scale, '0')}';
 }
