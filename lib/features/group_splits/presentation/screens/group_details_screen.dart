@@ -14,6 +14,7 @@ import '../providers/group_controller.dart';
 import '../providers/group_providers.dart';
 import '../providers/group_split_controller.dart';
 import '../providers/group_split_providers.dart';
+import '../widgets/group_pdf_export_button.dart';
 import 'add_group_expense_screen.dart';
 
 class GroupDetailsScreen extends ConsumerWidget {
@@ -554,6 +555,10 @@ class _GroupDetailsContent extends StatelessWidget {
         ),
 
         const SizedBox(height: 12),
+
+        GroupPdfExportButton(group: group),
+
+        const SizedBox(height: 10),
 
         OutlinedButton.icon(
           onPressed: onArchive,
