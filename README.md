@@ -1,336 +1,129 @@
 <div align="center">
 
-<img src="assets/icon/app_icon.png" alt="Splitwise Expense Tracker Logo" width="110" />
+<img src="assets/icon/app_icon.png" alt="Splitwise Expense Tracker" width="96" />
 
 Splitwise Expense Tracker
 
-Offline-first personal finance + shared expense management in Flutter
+Offline-first personal finance and shared expense management built with Flutter.
 
 <p>
-  <strong>Track.</strong>
-  <strong>Budget.</strong>
-  <strong>Analyze.</strong>
-  <strong>Split.</strong>
-  <strong>Settle.</strong>
-</p>
-
-<p>
-  <img src="https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter&logoColor=white" alt="Flutter" />
-  <img src="https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart&logoColor=white" alt="Dart" />
-  <img src="https://img.shields.io/badge/Riverpod-State%20Management-7E57C2" alt="Riverpod" />
-  <img src="https://img.shields.io/badge/Isar-Offline%20Database-5C2D91" alt="Isar" />
-  <img src="https://img.shields.io/badge/Material%203-Responsive%20UI-6750A4" alt="Material 3" />
-  <img src="https://img.shields.io/badge/Tests-Passing-2EA44F" alt="Tests Passing" />
-  <img src="https://img.shields.io/badge/Version-1.0.0-174A5B" alt="Version 1.0.0" />
-</p>
-
-<p>
-  A polished, production-oriented expense management application built with
-  <strong>Flutter</strong>, <strong>Riverpod</strong>, and <strong>Isar Community</strong>.
-  Designed for personal finance, budgeting, analytics, group expense sharing,
-  debt settlement, PDF reporting, multi-currency defaults, and offline-first use.
+Flutter · Riverpod · Isar Community · Material 3 · fl_chart · PDF Reports
 </p>
 
 </div>
 
-✨ Why this project stands out
+Overview
 
-<table>
-  <tr>
-    <td width="33%" valign="top">
-      <h3>💸 Personal Finance</h3>
-      <p>
-        Record daily expenses, organize them by category, filter history,
-        manage weekly/monthly budgets, and review financial progress.
-      </p>
-    </td>
-    <td width="33%" valign="top">
-      <h3>👥 Shared Expenses</h3>
-      <p>
-        Create groups, add members, split shared expenses fairly,
-        calculate balances, and record settlement payments.
-      </p>
-    </td>
-    <td width="33%" valign="top">
-      <h3>📊 Analytics</h3>
-      <p>
-        Understand spending patterns through category breakdowns,
-        income-vs-expense charts, budget health, and monthly summaries.
-      </p>
-    </td>
-  </tr>
-</table>
+Splitwise Expense Tracker is a cross-platform finance application for managing personal expenses, budgets, analytics, shared group expenses, balances, settlements, and PDF reports.
 
-🖥️ Product Preview
+The app is designed around an offline-first architecture with local persistence, clean separation of concerns, and a responsive Material 3 interface for desktop and mobile.
 
-<div align="center">
+Features
 
-<table>
-  <tr>
-    <td align="center">
-      <strong>Financial Overview</strong><br/>
-      <img src="docs/screenshots/overview.png" alt="Financial Overview" width="420" />
-    </td>
-    <td align="center">
-      <strong>Expenses</strong><br/>
-      <img src="docs/screenshots/expenses.png" alt="Expenses Screen" width="420" />
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <strong>Analytics</strong><br/>
-      <img src="docs/screenshots/analytics.png" alt="Analytics Screen" width="420" />
-    </td>
-    <td align="center">
-      <strong>Groups</strong><br/>
-      <img src="docs/screenshots/groups.png" alt="Groups Screen" width="420" />
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <strong>Group Details</strong><br/>
-      <img src="docs/screenshots/group-details.png" alt="Group Details" width="420" />
-    </td>
-    <td align="center">
-      <strong>Settings</strong><br/>
-      <img src="docs/screenshots/settings.png" alt="Settings Screen" width="420" />
-    </td>
-  </tr>
-</table>
-
-</div>
-
-Add screenshots to docs/screenshots/ using the filenames above.
-
-🚀 Core Features
-
-<table>
-  <tr>
-    <td valign="top" width="50%">
-
-💳 Personal Expenses
+Personal finance
 
 Add, edit, and delete expenses
 
-Category-based organization
+Search, filter, and sort transactions
 
-Search expenses by title
+Category-based expense organization
 
-Filter by category
+Weekly and monthly budgets
 
-Weekly and monthly filters
+Budget progress and warning thresholds
 
-Sort by newest / oldest
+Persistent local storage
 
-Sort by highest / lowest amount
+Analytics
 
-Currency-aware expense records
+Weekly and monthly summaries
 
-🎯 Budgets & Categories
+Income vs expense comparison
 
-Weekly spending budgets
-
-Monthly spending budgets
-
-Budget progress tracking
-
-Remaining-budget calculation
-
-Warning threshold
-
-Danger threshold
-
-Custom category management
-
-Protected default categories
-
-📈 Analytics
-
-Weekly expense summary
-
-Weekly income summary
-
-Monthly expense summary
-
-Monthly income summary
+Category spending breakdown
 
 Monthly net position
 
-Category-spending pie chart
-
-Income-vs-expense comparison
-
 Currency-isolated analytics
 
-🤝 Shared Expense Groups
+Shared expenses
 
-Create groups
+Create groups and manage members
 
-Add and remove members
+Add shared expenses
 
-Record shared expenses
-
-Equal split
-
-Precise minor-unit rounding
+Equal-split calculations
 
 Net balance calculation
 
-Settlement suggestions
+Debt settlement suggestions
 
-Partial settlement payments
+Partial and full settlement payments
 
 Settlement history
 
-</table>
+Archive or delete groups
 
-💱 Multi-Currency Default
+Reports
 
-The app supports a persisted default currency setting.
+Generate group PDF reports
+
+Include members, expenses, balances, and settlement suggestions
+
+Settings
+
+Persistent default currency
+
+Light / dark / system theme
+
+Budget and category management
+
+Local data location
+
+PDF report access
+
+Supported Currencies
+
+PKR · USD · GBP · EUR · AED · SAR
+
+The selected default currency is used for new records.
+
+Existing expenses, budgets, groups, and settlements keep their original stored currency values. No automatic FX conversion is performed.
+
+Screenshots
 
 <div align="center">
 
-Currency
-
-Name
-
-PKR
-
-Pakistani Rupee
-
-USD
-
-US Dollar
-
-GBP
-
-British Pound
-
-EUR
-
-Euro
-
-AED
-
-UAE Dirham
-
-SAR
-
-Saudi Riyal
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/overview.png" width="390" alt="Overview" /><br/>
+      <sub>Overview</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/expenses.png" width="390" alt="Expenses" /><br/>
+      <sub>Expenses</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/analytics.png" width="390" alt="Analytics" /><br/>
+      <sub>Analytics</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/groups.png" width="390" alt="Groups" /><br/>
+      <sub>Groups</sub>
+    </td>
+  </tr>
+</table>
 
 </div>
 
-How it works
+Place screenshots in docs/screenshots/ using the filenames above.
 
-Changing the default currency affects:
+Tech Stack
 
-new personal expenses
-
-new budgets
-
-new groups
-
-dashboard currency views
-
-analytics currency views
-
-Existing financial records are not converted, relabeled, or rewritten.
-
-The application intentionally does not perform live FX conversion in v1.0.
-
-🧠 Financial Logic
-
-All monetary values are stored and calculated using integer minor units.
-
-This avoids floating-point precision issues.
-
-Example
-
-PKR 3,000 paid by A
-Participants: A, B, C
-
-Equal share = PKR 1,000 each
-
-Resulting balances:
-
-A  +PKR 2,000
-B  -PKR 1,000
-C  -PKR 1,000
-
-Suggested settlements:
-
-B -> A  PKR 1,000
-C -> A  PKR 1,000
-
-The settlement engine uses a greedy debt simplification strategy to reduce unnecessary transfers.
-
-🧱 Architecture
-
-The project follows Feature-First Clean Architecture.
-
-lib/
-├── app/
-│   └── app.dart
-│
-├── core/
-│   ├── constants/
-│   ├── currency/
-│   ├── db/
-│   ├── errors/
-│   ├── theme/
-│   └── utils/
-│
-├── features/
-│   ├── analytics/
-│   │   ├── domain/
-│   │   └── presentation/
-│   │
-│   ├── dashboard/
-│   │   └── presentation/
-│   │
-│   ├── expenses/
-│   │   ├── data/
-│   │   ├── domain/
-│   │   └── presentation/
-│   │
-│   ├── group_splits/
-│   │   ├── data/
-│   │   ├── domain/
-│   │   └── presentation/
-│   │
-│   ├── home/
-│   │   └── presentation/
-│   │
-│   └── settings/
-│       └── presentation/
-│
-└── main.dart
-
-packages/
-└── local_database/
-    └── lib/
-
-Architectural goals
-
-clear separation of concerns
-
-testable domain logic
-
-isolated persistence layer
-
-reusable presentation components
-
-scalable feature organization
-
-offline-first behavior
-
-maintainable production code
-
-🛠️ Technology Stack
-
-<div align="center">
-
-Layer
+Category
 
 Technology
 
@@ -342,11 +135,11 @@ Language
 
 Dart
 
-State Management
+State management
 
 Riverpod
 
-Database
+Local database
 
 Isar Community
 
@@ -354,240 +147,89 @@ Charts
 
 fl_chart
 
-PDF Reports
+PDF
 
 pdf + printing
-
-Architecture
-
-Feature-First Clean Architecture
 
 UI
 
 Material 3
 
+Architecture
+
+Feature-First Clean Architecture
+
 Testing
 
 flutter_test + integration_test
 
-Platforms
+Architecture
 
-Android, iOS, Windows/Desktop
+lib/
+├── app/
+├── core/
+│   ├── constants/
+│   ├── currency/
+│   ├── db/
+│   ├── errors/
+│   ├── theme/
+│   └── utils/
+│
+├── features/
+│   ├── analytics/
+│   ├── dashboard/
+│   ├── expenses/
+│   ├── group_splits/
+│   ├── home/
+│   └── settings/
+│
+└── main.dart
 
-</div>
+packages/
+└── local_database/
 
-🎨 UI & UX
+The project separates presentation, domain, and data responsibilities so business logic remains testable and persistence stays isolated from UI code.
 
-The interface is designed as a professional finance workspace rather than a demo application.
+Money Handling
 
-Desktop
+All monetary calculations use integer minor units instead of floating-point arithmetic.
 
-responsive left sidebar
+Example:
 
-overview workspace
+PKR 3,000 paid by A
+Split between A, B, C
 
-professional KPI cards
+A  +PKR 2,000
+B  -PKR 1,000
+C  -PKR 1,000
 
-expense tables
+Suggested settlement:
 
-responsive analytics
+B -> A  PKR 1,000
+C -> A  PKR 1,000
 
-dedicated settings navigation
+Getting Started
 
-wide group details layout
-
-Mobile
-
-bottom navigation
-
-compact cards
-
-responsive forms
-
-scroll-safe screens
-
-fixed primary save actions
-
-touch-friendly controls
-
-Appearance
-
-Light mode
-
-Dark mode
-
-System theme
-
-Material 3 visual language
-
-Restrained enterprise finance palette
-
-Semantic colors for success, warning, danger, and information
-
-⚙️ Settings
-
-The Settings workspace contains real interactive functionality.
-
-<table>
-  <tr>
-    <td><strong>💱 Default Currency</strong></td>
-    <td>Choose the default currency used by new financial records.</td>
-  </tr>
-  <tr>
-    <td><strong>🎨 Appearance</strong></td>
-    <td>Switch between system, light, and dark modes.</td>
-  </tr>
-  <tr>
-    <td><strong>🎯 Budgets & Categories</strong></td>
-    <td>Manage budget limits and expense categories.</td>
-  </tr>
-  <tr>
-    <td><strong>💾 Data & Storage</strong></td>
-    <td>Inspect the local application-data location.</td>
-  </tr>
-  <tr>
-    <td><strong>📄 Reports</strong></td>
-    <td>Open groups and export PDF reports.</td>
-  </tr>
-  <tr>
-    <td><strong>ℹ️ About</strong></td>
-    <td>View application and technology information.</td>
-  </tr>
-</table>
-
-📄 PDF Reports
-
-Group PDF reports can include:
-
-group information
-
-group members
-
-shared expenses
-
-net balances
-
-settlement suggestions
-
-PDF support is implemented using:
-
-pdf
-printing
-
-💾 Offline-First Persistence
-
-The application works without requiring a cloud connection.
-
-Data is stored locally with Isar Community.
-
-Persisted data includes:
-
-personal expenses
-
-categories
-
-budgets
-
-groups
-
-members
-
-shared expenses
-
-settlement payments
-
-The default currency preference is also persisted locally.
-
-🧪 Quality & Testing
-
-The project includes automated validation across multiple layers.
-
-Unit Tests
-
-Business logic such as:
-
-equal split calculation
-
-balance calculation
-
-debt settlement calculation
-
-budget progress
-
-analytics logic
-
-Repository / Persistence Tests
-
-Validate:
-
-expense persistence
-
-budget persistence
-
-group persistence
-
-Isar repository behavior
-
-Widget Tests
-
-Validate key UI behavior and persisted data rendering.
-
-Integration Test
-
-The end-to-end integration flow verifies:
-
-Launch application
-        ↓
-Open Groups
-        ↓
-Create group
-        ↓
-Open Group Details
-        ↓
-Add shared expense
-        ↓
-Save transaction
-        ↓
-Verify persisted transaction
-
-Verification commands
-
-flutter analyze
-flutter test -j 1
-flutter test integration_test/app_test.dart
-
-🏁 Getting Started
-
-1. Clone the repository
+Clone
 
 git clone https://github.com/HuzaifaaNadeem/Splitwise-Expense-Tracker.git
 cd Splitwise-Expense-Tracker
 
-2. Install packages
+Install dependencies
 
 flutter pub get
 
-3. Verify Flutter
-
-flutter doctor
-
-⚡ Code Generation
-
-Riverpod
-
-Run from the project root:
+Riverpod code generation
 
 dart run build_runner build --delete-conflicting-outputs
 
-Isar
-
-Run inside the local database package:
+Isar code generation
 
 cd packages/local_database
 dart run build_runner build --delete-conflicting-outputs
 cd ../..
 
-▶️ Run the Application
+Run
 
 Windows
 
@@ -597,157 +239,54 @@ Android
 
 flutter run
 
-Available devices
+Testing
 
-flutter devices
-
-✅ Release Verification
-
-Before publishing a release:
-
-dart format lib integration_test test
 flutter analyze
 flutter test -j 1
 flutter test integration_test/app_test.dart
 
-🗺️ Roadmap
+The integration test covers the main shared-expense flow:
 
-<details>
-<summary><strong>Click to view future improvements</strong></summary>
+Launch
+-> Groups
+-> Create Group
+-> Group Details
+-> Add Shared Expense
+-> Save
+-> Verify Transaction
 
-<br/>
+Project Status
+
+Version 1.0.0
+
+Core functionality is complete and tested.
+
+Planned Improvements
 
 Exact split UI
 
 Percentage split UI
 
-Weighted-share split UI
+Weighted share split UI
 
 Encrypted backup and restore
 
-CSV export
+CSV / spreadsheet export
 
-Spreadsheet export
+Cloud sync
 
 Authentication
 
-Cloud synchronization
+Live FX conversion
 
-Live foreign-exchange conversion
+Multi-device sync
 
-Multi-device synchronization
+License
 
-Recurring expenses
-
-Financial goals
-
-Notifications and reminders
-
-</details>
-
-📸 Recommended Portfolio Screenshots
-
-For a strong GitHub / LinkedIn presentation, capture:
-
-<table>
-  <tr>
-    <td>01</td>
-    <td><strong>Financial Overview</strong></td>
-    <td>KPI cards, budget health, recent expenses</td>
-  </tr>
-  <tr>
-    <td>02</td>
-    <td><strong>Expenses</strong></td>
-    <td>Search, filters, sorting, transaction table</td>
-  </tr>
-  <tr>
-    <td>03</td>
-    <td><strong>Analytics</strong></td>
-    <td>Pie chart, income-vs-expense chart, summary cards</td>
-  </tr>
-  <tr>
-    <td>04</td>
-    <td><strong>Groups</strong></td>
-    <td>Professional group workspace</td>
-  </tr>
-  <tr>
-    <td>05</td>
-    <td><strong>Group Details</strong></td>
-    <td>Balances, settlements, shared expenses</td>
-  </tr>
-  <tr>
-    <td>06</td>
-    <td><strong>Settings</strong></td>
-    <td>Default currency and appearance controls</td>
-  </tr>
-  <tr>
-    <td>07</td>
-    <td><strong>Dark Mode</strong></td>
-    <td>Show responsive visual polish</td>
-  </tr>
-</table>
-
-📌 Project Status
+Choose a license before public or commercial distribution.
 
 <div align="center">
 
-✅ Version 1.0.0
-
-Core functionality complete · Tests passing · Desktop runtime verified
-
-</div>
-
-🤝 Contributing
-
-Contributions, ideas, and improvements are welcome.
-
-Suggested workflow:
-
-git checkout -b feature/your-feature
-git add .
-git commit -m "feat: add your feature"
-git push origin feature/your-feature
-
-Then open a Pull Request.
-
-🔒 Privacy
-
-This application is designed as an offline-first finance tool.
-
-Financial data remains on the user's device unless future cloud features are explicitly added.
-
-📜 License
-
-Before commercial distribution or public release, add a suitable license based on the intended usage model.
-
-For an open-source project, common choices include:
-
-MIT
-
-Apache 2.0
-
-GPLv3
-
-For proprietary/commercial distribution, use an appropriate commercial license instead.
-
-<div align="center">
-
-⭐ Built with Flutter
-
-<p>
-  Designed as a portfolio-quality, offline-first finance application with
-  clean architecture, persistent local storage, automated testing,
-  responsive UI, and practical expense-sharing workflows.
-</p>
-
-<p>
-  <strong>Track smarter. Split fairly. Settle clearly.</strong>
-</p>
-
-<br/>
-
-<img src="https://img.shields.io/badge/Made%20with-Flutter-02569B?logo=flutter&logoColor=white" alt="Made with Flutter" />
-<img src="https://img.shields.io/badge/Architecture-Clean-174A5B" alt="Clean Architecture" />
-<img src="https://img.shields.io/badge/Storage-Offline--First-16815D" alt="Offline First" />
+Built with Flutter · Offline-first · Clean Architecture
 
 </div>
