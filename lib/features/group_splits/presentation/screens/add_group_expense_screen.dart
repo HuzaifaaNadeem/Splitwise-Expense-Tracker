@@ -30,7 +30,6 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
   late Set<String> _selectedMemberIds;
 
   DateTime _occurredAt = DateTime.now();
-
   bool _isSaving = false;
 
   static const EqualSplitCalculator _equalSplitCalculator =
@@ -49,8 +48,6 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
 
       _paidByMemberId = currentUser?.id ?? members.first.id;
 
-      // Standard equal-split behaviour:
-      // every member participates initially, including the payer.
       _selectedMemberIds = members
           .map((GroupMember member) => member.id)
           .toSet();
@@ -58,34 +55,31 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
       _paidByMemberId = '';
       _selectedMemberIds = <String>{};
     }
-
-    _amountController.addListener(_refreshPreview);
   }
 
   @override
   void dispose() {
-    _amountController.removeListener(_refreshPreview);
-
     _titleController.dispose();
     _amountController.dispose();
     _notesController.dispose();
-
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final ColorScheme colors = theme.colorScheme;
 
     return Scaffold(
       key: const Key('add_group_expense_screen'),
       appBar: AppBar(title: const Text('Add group expense')),
       body: SafeArea(
+        bottom: false,
         child: Form(
           key: _formKey,
           child: ListView(
             key: const Key('add_group_expense_list'),
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
             children: <Widget>[
               Text(
                 widget.group.name,
@@ -95,14 +89,11 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Record who paid and exactly who should share the expense.',
+                'Record a shared expense and split it equally '
+                'between selected members.',
                 style: theme.textTheme.bodyMedium,
               ),
               const SizedBox(height: 24),
-
-              // ----------------------------------------------------------
-              // TITLE
-              // ----------------------------------------------------------
               TextFormField(
                 key: const Key('group_expense_title_field'),
                 controller: _titleController,
@@ -128,12 +119,7 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
                   return null;
                 },
               ),
-
               const SizedBox(height: 16),
-
-              // ----------------------------------------------------------
-              // AMOUNT
-              // ----------------------------------------------------------
               TextFormField(
                 key: const Key('group_expense_amount_field'),
                 controller: _amountController,
@@ -142,35 +128,27 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
                 ),
                 textInputAction: TextInputAction.next,
                 decoration: InputDecoration(
-                  labelText: 'Total amount',
+                  labelText: 'Amount',
                   hintText: '0.00',
                   prefixIcon: const Icon(Icons.payments_outlined),
                   suffixText: widget.group.defaultCurrencyCode,
                   border: const OutlineInputBorder(),
                 ),
                 validator: (String? value) {
-                  final int? amountMinor = _parseAmountMinor(
-                    value ?? '',
-                    widget.group.defaultCurrencyScale,
-                  );
+                  final double? amount = double.tryParse(value?.trim() ?? '');
 
-                  if (amountMinor == null) {
+                  if (amount == null) {
                     return 'Enter a valid amount.';
                   }
 
-                  if (amountMinor <= 0) {
+                  if (amount <= 0) {
                     return 'Amount must be greater than zero.';
                   }
 
                   return null;
                 },
               ),
-
               const SizedBox(height: 16),
-
-              // ----------------------------------------------------------
-              // PAYER
-              // ----------------------------------------------------------
               DropdownButtonFormField<String>(
                 key: const Key('group_expense_payer_dropdown'),
                 initialValue: _paidByMemberId.isEmpty ? null : _paidByMemberId,
@@ -210,19 +188,7 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
                   return null;
                 },
               ),
-
-              const SizedBox(height: 10),
-
-              _PayerExplanationCard(
-                payer: _findActiveMember(_paidByMemberId),
-                payerSelected: _selectedMemberIds.contains(_paidByMemberId),
-              ),
-
               const SizedBox(height: 24),
-
-              // ----------------------------------------------------------
-              // PARTICIPANTS
-              // ----------------------------------------------------------
               Row(
                 children: <Widget>[
                   Expanded(
@@ -243,16 +209,7 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
                   ),
                 ],
               ),
-
-              const SizedBox(height: 4),
-
-              Text(
-                'Only checked members will owe a share of this expense.',
-                style: theme.textTheme.bodySmall,
-              ),
-
-              const SizedBox(height: 10),
-
+              const SizedBox(height: 8),
               if (_activeMembers.isEmpty)
                 const Card(
                   child: Padding(
@@ -282,7 +239,6 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
                             _activeMembers[index].id,
                           ),
                           enabled: !_isSaving,
-                          isPayer: _activeMembers[index].id == _paidByMemberId,
                           onChanged: (bool selected) {
                             _setMemberSelected(
                               _activeMembers[index].id,
@@ -296,37 +252,14 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
                     ],
                   ),
                 ),
-
               const SizedBox(height: 8),
-
               Text(
                 '${_selectedMemberIds.length} '
                 '${_selectedMemberIds.length == 1 ? 'member' : 'members'} '
                 'selected',
                 style: theme.textTheme.bodySmall,
               ),
-
               const SizedBox(height: 24),
-
-              // ----------------------------------------------------------
-              // LIVE SPLIT PREVIEW
-              // ----------------------------------------------------------
-              Text(
-                'Split preview',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              _buildSplitPreview(context),
-
-              const SizedBox(height: 24),
-
-              // ----------------------------------------------------------
-              // NOTES
-              // ----------------------------------------------------------
               TextFormField(
                 key: const Key('group_expense_notes_field'),
                 controller: _notesController,
@@ -340,9 +273,7 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
                   alignLabelWithHint: true,
                 ),
               ),
-
               const SizedBox(height: 16),
-
               ListTile(
                 key: const Key('group_expense_date_button'),
                 contentPadding: EdgeInsets.zero,
@@ -352,128 +283,36 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: _isSaving ? null : _selectDate,
               ),
-
-              const SizedBox(height: 28),
-
-              FilledButton.icon(
-                key: const Key('save_group_expense_button'),
-                onPressed: _isSaving ? null : _saveExpense,
-                icon: _isSaving
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.check),
-                label: Text(_isSaving ? 'Saving...' : 'Save expense'),
-              ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildSplitPreview(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    final int? totalAmountMinor = _parseAmountMinor(
-      _amountController.text,
-      widget.group.defaultCurrencyScale,
-    );
-
-    if (totalAmountMinor == null || totalAmountMinor <= 0) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(20),
-          child: Text(
-            'Enter an amount to preview the split.',
-            textAlign: TextAlign.center,
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            border: Border(top: BorderSide(color: colors.outlineVariant)),
           ),
-        ),
-      );
-    }
-
-    if (_selectedMemberIds.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Text(
-            'Select at least one member.',
-            style: TextStyle(color: theme.colorScheme.error),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      );
-    }
-
-    final List<String> participantIds = _orderedSelectedMemberIds();
-
-    final List<GroupSplitShare> shares;
-
-    try {
-      shares = _equalSplitCalculator.calculate(
-        totalAmountMinor: totalAmountMinor,
-        memberIds: participantIds,
-      );
-    } on FormatException catch (error) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Text(error.message, textAlign: TextAlign.center),
-        ),
-      );
-    }
-
-    final Map<String, int> amountByMemberId = <String, int>{
-      for (final GroupSplitShare share in shares)
-        share.memberId: share.owedAmountMinor,
-    };
-
-    return Card(
-      key: const Key('group_expense_split_preview'),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: <Widget>[
-          for (
-            int index = 0;
-            index < participantIds.length;
-            index++
-          ) ...<Widget>[
-            _SplitPreviewTile(
-              member: _memberById(participantIds[index]),
-              amountMinor: amountByMemberId[participantIds[index]]!,
-              currencyCode: widget.group.defaultCurrencyCode,
-              currencyScale: widget.group.defaultCurrencyScale,
-              isPayer: participantIds[index] == _paidByMemberId,
-            ),
-            if (index < participantIds.length - 1)
-              const Divider(height: 1, indent: 16, endIndent: 16),
-          ],
-          const Divider(height: 1),
-          ListTile(
-            title: const Text(
-              'Total',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            trailing: Text(
-              '${widget.group.defaultCurrencyCode} '
-              '${_formatMinorAmount(totalAmountMinor, widget.group.defaultCurrencyScale)}',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          child: SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: FilledButton.icon(
+              key: const Key('save_group_expense_button'),
+              onPressed: _isSaving ? null : _saveExpense,
+              icon: _isSaving
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.check),
+              label: Text(_isSaving ? 'Saving...' : 'Save expense'),
             ),
           ),
-        ],
+        ),
       ),
     );
-  }
-
-  void _refreshPreview() {
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {});
   }
 
   void _toggleAllMembers() {
@@ -543,7 +382,10 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
       return;
     }
 
-    final List<String> participantIds = _orderedSelectedMemberIds();
+    final List<String> participantIds = _activeMembers
+        .where((GroupMember member) => _selectedMemberIds.contains(member.id))
+        .map((GroupMember member) => member.id)
+        .toList(growable: false);
 
     final List<GroupSplitShare> shares;
 
@@ -554,18 +396,6 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
       );
     } on FormatException catch (error) {
       _showMessage(error.message);
-      return;
-    }
-
-    final int verificationTotal = shares.fold<int>(
-      0,
-      (int total, GroupSplitShare share) => total + share.owedAmountMinor,
-    );
-
-    if (verificationTotal != totalAmountMinor) {
-      _showMessage(
-        'Split verification failed. The shares do not equal the total.',
-      );
       return;
     }
 
@@ -625,67 +455,12 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
     Navigator.of(context).pop();
   }
 
-  List<String> _orderedSelectedMemberIds() {
-    return _activeMembers
-        .where((GroupMember member) => _selectedMemberIds.contains(member.id))
-        .map((GroupMember member) => member.id)
-        .toList(growable: false);
-  }
-
-  GroupMember? _findActiveMember(String memberId) {
-    for (final GroupMember member in _activeMembers) {
-      if (member.id == memberId) {
-        return member;
-      }
-    }
-
-    return null;
-  }
-
-  GroupMember _memberById(String memberId) {
-    for (final GroupMember member in _activeMembers) {
-      if (member.id == memberId) {
-        return member;
-      }
-    }
-
-    throw StateError('Unknown group member: $memberId');
-  }
-
   int? _parseAmountMinor(String input, int scale) {
-    final String normalized = input.trim().replaceAll(',', '');
+    final double? amount = double.tryParse(input.trim());
 
-    if (normalized.isEmpty) {
+    if (amount == null) {
       return null;
     }
-
-    if (normalized.startsWith('-')) {
-      return null;
-    }
-
-    final List<String> parts = normalized.split('.');
-
-    if (parts.length > 2) {
-      return null;
-    }
-
-    final String wholePart = parts.first;
-
-    if (wholePart.isEmpty || !RegExp(r'^\d+$').hasMatch(wholePart)) {
-      return null;
-    }
-
-    String fractionPart = parts.length == 2 ? parts[1] : '';
-
-    if (fractionPart.isNotEmpty && !RegExp(r'^\d+$').hasMatch(fractionPart)) {
-      return null;
-    }
-
-    if (fractionPart.length > scale) {
-      return null;
-    }
-
-    fractionPart = fractionPart.padRight(scale, '0');
 
     int multiplier = 1;
 
@@ -693,11 +468,7 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
       multiplier *= 10;
     }
 
-    final int whole = int.parse(wholePart);
-
-    final int fraction = fractionPart.isEmpty ? 0 : int.parse(fractionPart);
-
-    return whole * multiplier + fraction;
+    return (amount * multiplier).round();
   }
 
   void _showMessage(String message) {
@@ -718,54 +489,11 @@ class _AddGroupExpenseScreenState extends ConsumerState<AddGroupExpenseScreen> {
   }
 }
 
-class _PayerExplanationCard extends StatelessWidget {
-  const _PayerExplanationCard({
-    required this.payer,
-    required this.payerSelected,
-  });
-
-  final GroupMember? payer;
-  final bool payerSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    if (payer == null) {
-      return const SizedBox.shrink();
-    }
-
-    final String name = payer!.isCurrentUser ? 'You' : payer!.displayName;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            const Icon(Icons.info_outline, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                payerSelected
-                    ? '$name paid the bill and is also included '
-                          'in the split.'
-                    : '$name paid the bill but is not included '
-                          'in the split, so the selected members '
-                          'will repay the full amount.',
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _ParticipantTile extends StatelessWidget {
   const _ParticipantTile({
     required this.member,
     required this.selected,
     required this.enabled,
-    required this.isPayer,
     required this.onChanged,
     super.key,
   });
@@ -773,7 +501,6 @@ class _ParticipantTile extends StatelessWidget {
   final GroupMember member;
   final bool selected;
   final bool enabled;
-  final bool isPayer;
   final ValueChanged<bool> onChanged;
 
   @override
@@ -804,15 +531,9 @@ class _ParticipantTile extends StatelessWidget {
             ? '${member.displayName} (You)'
             : member.displayName,
       ),
-      subtitle: Text(
-        isPayer
-            ? selected
-                  ? 'Paid • included in split'
-                  : 'Paid • not included in split'
-            : selected
-            ? 'Included in split'
-            : 'Not included',
-      ),
+      subtitle: member.email == null || member.email!.trim().isEmpty
+          ? null
+          : Text(member.email!),
       controlAffinity: ListTileControlAffinity.trailing,
     );
   }
@@ -822,60 +543,4 @@ class _ParticipantTile extends StatelessWidget {
 
     return color.computeLuminance() > 0.5 ? Colors.black : Colors.white;
   }
-}
-
-class _SplitPreviewTile extends StatelessWidget {
-  const _SplitPreviewTile({
-    required this.member,
-    required this.amountMinor,
-    required this.currencyCode,
-    required this.currencyScale,
-    required this.isPayer,
-  });
-
-  final GroupMember member;
-  final int amountMinor;
-  final String currencyCode;
-  final int currencyScale;
-  final bool isPayer;
-
-  @override
-  Widget build(BuildContext context) {
-    final String name = member.isCurrentUser
-        ? '${member.displayName} (You)'
-        : member.displayName;
-
-    return ListTile(
-      title: Text(name),
-      subtitle: isPayer
-          ? const Text('Payer • own share')
-          : const Text('Owes this share'),
-      trailing: Text(
-        '$currencyCode '
-        '${_formatMinorAmount(amountMinor, currencyScale)}',
-        style: Theme.of(
-          context,
-        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-}
-
-String _formatMinorAmount(int amountMinor, int scale) {
-  int divisor = 1;
-
-  for (int index = 0; index < scale; index++) {
-    divisor *= 10;
-  }
-
-  final int whole = amountMinor ~/ divisor;
-
-  if (scale == 0) {
-    return whole.toString();
-  }
-
-  final int fraction = amountMinor % divisor;
-
-  return '$whole.'
-      '${fraction.toString().padLeft(scale, '0')}';
 }

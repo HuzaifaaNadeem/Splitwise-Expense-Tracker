@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/currency/app_currency.dart';
+import '../../../../core/currency/default_currency_controller.dart';
 import '../../../../core/errors/failure.dart';
 import '../../../../core/errors/result.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -87,6 +89,13 @@ class ExpenseSettingsScreen extends ConsumerWidget {
                         ),
                       );
                     },
+                    onDelete: weekly == null
+                        ? null
+                        : () {
+                            unawaited(
+                              _deleteBudget(context, ref, BudgetPeriod.weekly),
+                            );
+                          },
                   ),
                   const SizedBox(height: 16),
                   _BudgetCard(
@@ -104,6 +113,13 @@ class ExpenseSettingsScreen extends ConsumerWidget {
                         ),
                       );
                     },
+                    onDelete: monthly == null
+                        ? null
+                        : () {
+                            unawaited(
+                              _deleteBudget(context, ref, BudgetPeriod.monthly),
+                            );
+                          },
                   ),
                 ],
               );
@@ -234,6 +250,14 @@ class ExpenseSettingsScreen extends ConsumerWidget {
 
     final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
+    final AppCurrency defaultCurrency = ref.read(
+      defaultCurrencyControllerProvider,
+    );
+
+    final AppCurrency budgetCurrency = existing == null
+        ? defaultCurrency
+        : AppCurrency.fromCode(existing.currencyCode);
+
     await showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -307,16 +331,18 @@ class ExpenseSettingsScreen extends ConsumerWidget {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Budget amount',
-                      prefixText: 'PKR ',
-                      prefixIcon: Icon(Icons.account_balance_wallet_outlined),
-                      border: OutlineInputBorder(),
+                      prefixText: '${budgetCurrency.code} ',
+                      prefixIcon: const Icon(
+                        Icons.account_balance_wallet_outlined,
+                      ),
+                      border: const OutlineInputBorder(),
                     ),
                     validator: (String? value) {
                       final int? amount = MoneyUtils.parseToMinorUnits(
                         value ?? '',
-                        scale: 2,
+                        scale: budgetCurrency.scale,
                       );
 
                       if (amount == null || amount <= 0) {
@@ -327,6 +353,17 @@ class ExpenseSettingsScreen extends ConsumerWidget {
                     },
                   ),
                   const SizedBox(height: 12),
+                  Text(
+                    existing == null
+                        ? 'New budgets use your default currency '
+                              '(${budgetCurrency.code}).'
+                        : 'This existing budget remains in '
+                              '${budgetCurrency.code}. Delete it first if you '
+                              'want to recreate it in your current default '
+                              'currency.',
+                    style: Theme.of(dialogContext).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 6),
                   Text(
                     'The budget amount will carry forward automatically '
                     'into each new ${period == BudgetPeriod.weekly ? 'week' : 'month'}.',
@@ -351,12 +388,17 @@ class ExpenseSettingsScreen extends ConsumerWidget {
 
                 final int amountMinor = MoneyUtils.parseToMinorUnits(
                   controller.text,
-                  scale: 2,
+                  scale: budgetCurrency.scale,
                 )!;
 
                 final Result<Budget> result = await ref
                     .read(budgetControllerProvider.notifier)
-                    .saveBudget(period: period, amountMinor: amountMinor);
+                    .saveBudget(
+                      period: period,
+                      amountMinor: amountMinor,
+                      currencyCode: budgetCurrency.code,
+                      currencyScale: budgetCurrency.scale,
+                    );
 
                 if (!dialogContext.mounted) {
                   return;
@@ -381,6 +423,65 @@ class ExpenseSettingsScreen extends ConsumerWidget {
     );
 
     controller.dispose();
+  }
+
+  Future<void> _deleteBudget(
+    BuildContext context,
+    WidgetRef ref,
+    BudgetPeriod period,
+  ) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete budget?'),
+          content: Text(
+            'Delete the ${period == BudgetPeriod.weekly ? 'weekly' : 'monthly'} '
+            'budget? You can create a new one afterward using your current '
+            'default currency.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+
+    final Result<bool> result = await ref
+        .read(budgetControllerProvider.notifier)
+        .deleteBudget(period);
+
+    if (!context.mounted) {
+      return;
+    }
+
+    result.fold<void>(
+      onSuccess: (bool deleted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Budget deleted.')));
+      },
+      onFailure: (Failure failure) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(failure.message)));
+      },
+    );
   }
 
   Future<void> _showCategoryDialog(
@@ -674,6 +775,7 @@ class _BudgetCard extends StatelessWidget {
     required this.budget,
     required this.expenses,
     required this.onEdit,
+    required this.onDelete,
   });
 
   final String title;
@@ -681,6 +783,7 @@ class _BudgetCard extends StatelessWidget {
   final Budget? budget;
   final List<Expense> expenses;
   final VoidCallback onEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -807,6 +910,12 @@ class _BudgetCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (onDelete != null)
+                  IconButton(
+                    tooltip: 'Delete budget',
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.delete_outline),
+                  ),
                 IconButton(
                   tooltip: 'Edit budget',
                   onPressed: onEdit,
@@ -987,7 +1096,7 @@ _PeriodInfo _weeklyPeriodInfo(DateTime date) {
 
   return _PeriodInfo(
     currentLabel:
-        '${_shortDate(start)} – '
+        '${_shortDate(start)} â€“ '
         '${_shortDateWithYear(end)}',
     resetLabel: 'Resets ${_shortDateWithYear(nextStart)}',
   );

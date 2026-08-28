@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/currency/app_currency.dart';
+import '../../../../core/currency/default_currency_controller.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/money_utils.dart';
 import '../../../expenses/domain/entities/expense.dart';
 import '../../../expenses/domain/entities/expense_category.dart';
@@ -48,6 +51,8 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       );
     }
 
+    final AppCurrency currency = ref.watch(defaultCurrencyControllerProvider);
+
     final AnalyticsSnapshot snapshot = ref.watch(analyticsSnapshotProvider);
 
     final List<ExpenseCategory> categories =
@@ -57,30 +62,23 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       for (final ExpenseCategory category in categories) category.id: category,
     };
 
+    final DateTime now = DateTime.now();
+
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final bool useWideLayout = constraints.maxWidth >= 950;
+        final bool wide = constraints.maxWidth >= 950;
 
         return ListView(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+          padding: const EdgeInsets.fromLTRB(28, 28, 28, 48),
           children: <Widget>[
-            Text(
-              'Financial Analytics',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            _AnalyticsHeader(
+              month: DateFormat('MMMM yyyy').format(now),
+              currency: currency,
             ),
-            const SizedBox(height: 6),
-            Text(
-              'Current week and month • PKR',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 24),
-            _SummaryCards(snapshot: snapshot),
-            const SizedBox(height: 24),
-            if (useWideLayout)
+            const SizedBox(height: 26),
+            _SummaryCards(snapshot: snapshot, currency: currency),
+            const SizedBox(height: 28),
+            if (wide)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
@@ -88,6 +86,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                     child: _CategoryChartCard(
                       snapshot: snapshot,
                       categoryMap: categoryMap,
+                      currency: currency,
                       touchedIndex: _touchedPieIndex,
                       onTouchedIndexChanged: (int value) {
                         setState(() {
@@ -96,14 +95,20 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 20),
-                  Expanded(child: _ComparisonChartCard(snapshot: snapshot)),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: _ComparisonChartCard(
+                      snapshot: snapshot,
+                      currency: currency,
+                    ),
+                  ),
                 ],
               )
             else ...<Widget>[
               _CategoryChartCard(
                 snapshot: snapshot,
                 categoryMap: categoryMap,
+                currency: currency,
                 touchedIndex: _touchedPieIndex,
                 onTouchedIndexChanged: (int value) {
                   setState(() {
@@ -111,8 +116,8 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                   });
                 },
               ),
-              const SizedBox(height: 20),
-              _ComparisonChartCard(snapshot: snapshot),
+              const SizedBox(height: 18),
+              _ComparisonChartCard(snapshot: snapshot, currency: currency),
             ],
           ],
         );
@@ -121,10 +126,73 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   }
 }
 
+class _AnalyticsHeader extends StatelessWidget {
+  const _AnalyticsHeader({required this.month, required this.currency});
+
+  final String month;
+  final AppCurrency currency;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    return Wrap(
+      spacing: 16,
+      runSpacing: 14,
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: <Widget>[
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Financial Analytics',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Understand spending patterns, income and financial performance.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
+            ),
+          ],
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            border: Border.all(color: colors.outlineVariant),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                Icons.calendar_month_outlined,
+                size: 18,
+                color: colors.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '$month â€¢ ${currency.code}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _SummaryCards extends StatelessWidget {
-  const _SummaryCards({required this.snapshot});
+  const _SummaryCards({required this.snapshot, required this.currency});
 
   final AnalyticsSnapshot snapshot;
+  final AppCurrency currency;
 
   @override
   Widget build(BuildContext context) {
@@ -137,66 +205,100 @@ class _SummaryCards extends StatelessWidget {
           title: 'Weekly Expenses',
           value: MoneyUtils.formatMinorUnits(
             snapshot.weekly.expenseMinor,
-            currencyCode: 'PKR',
-            scale: 2,
+            currencyCode: currency.code,
+            scale: currency.scale,
           ),
+          tone: _SummaryTone.neutral,
         ),
         _SummaryCard(
           icon: Icons.savings_outlined,
           title: 'Weekly Income',
           value: MoneyUtils.formatMinorUnits(
             snapshot.weekly.incomeMinor,
-            currencyCode: 'PKR',
-            scale: 2,
+            currencyCode: currency.code,
+            scale: currency.scale,
           ),
+          tone: _SummaryTone.positive,
         ),
         _SummaryCard(
           icon: Icons.calendar_month_outlined,
           title: 'Monthly Expenses',
           value: MoneyUtils.formatMinorUnits(
             snapshot.monthly.expenseMinor,
-            currencyCode: 'PKR',
-            scale: 2,
+            currencyCode: currency.code,
+            scale: currency.scale,
           ),
+          tone: _SummaryTone.neutral,
         ),
         _SummaryCard(
           icon: Icons.account_balance_wallet_outlined,
           title: 'Monthly Income',
           value: MoneyUtils.formatMinorUnits(
             snapshot.monthly.incomeMinor,
-            currencyCode: 'PKR',
-            scale: 2,
+            currencyCode: currency.code,
+            scale: currency.scale,
           ),
+          tone: _SummaryTone.positive,
+        ),
+        _SummaryCard(
+          icon: Icons.trending_up_outlined,
+          title: 'Monthly Net',
+          value: MoneyUtils.formatMinorUnits(
+            snapshot.monthly.netMinor,
+            currencyCode: currency.code,
+            scale: currency.scale,
+          ),
+          tone: snapshot.monthly.netMinor >= 0
+              ? _SummaryTone.positive
+              : _SummaryTone.negative,
         ),
       ],
     );
   }
 }
 
+enum _SummaryTone { neutral, positive, negative }
+
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
     required this.icon,
     required this.title,
     required this.value,
+    required this.tone,
   });
 
   final IconData icon;
   final String title;
   final String value;
+  final _SummaryTone tone;
 
   @override
   Widget build(BuildContext context) {
     final ColorScheme colors = Theme.of(context).colorScheme;
 
+    final Color accent = switch (tone) {
+      _SummaryTone.neutral => colors.primary,
+      _SummaryTone.positive => AppColors.positive,
+      _SummaryTone.negative => AppColors.danger,
+    };
+
     return SizedBox(
-      width: 225,
+      width: 230,
       child: Card(
         child: Padding(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Icon(icon, color: colors.primary),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.09),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, size: 21, color: accent),
+              ),
               const SizedBox(height: 18),
               Text(
                 value,
@@ -204,9 +306,9 @@ class _SummaryCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(
                   context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 5),
               Text(
                 title,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -225,42 +327,70 @@ class _CategoryChartCard extends StatelessWidget {
   const _CategoryChartCard({
     required this.snapshot,
     required this.categoryMap,
+    required this.currency,
     required this.touchedIndex,
     required this.onTouchedIndexChanged,
   });
 
   final AnalyticsSnapshot snapshot;
   final Map<String, ExpenseCategory> categoryMap;
+  final AppCurrency currency;
   final int touchedIndex;
   final ValueChanged<int> onTouchedIndexChanged;
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
     final List<CategorySpending> spending = snapshot.categorySpending;
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(22),
+        padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              'Spending by Category',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            Row(
+              children: <Widget>[
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: colors.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(
+                    Icons.donut_large_outlined,
+                    color: colors.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Spending by Category',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Current month',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Current month',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             if (spending.isEmpty)
               const SizedBox(
-                height: 300,
+                height: 310,
                 child: _ChartEmptyState(
                   icon: Icons.donut_large_outlined,
                   message:
@@ -269,13 +399,13 @@ class _CategoryChartCard extends StatelessWidget {
               )
             else ...<Widget>[
               SizedBox(
-                height: 300,
+                height: 310,
                 child: Stack(
                   alignment: Alignment.center,
                   children: <Widget>[
                     PieChart(
                       PieChartData(
-                        centerSpaceRadius: 70,
+                        centerSpaceRadius: 72,
                         sectionsSpace: 3,
                         pieTouchData: PieTouchData(
                           touchCallback:
@@ -300,18 +430,19 @@ class _CategoryChartCard extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
                           Text(
-                            'Total',
-                            style: Theme.of(context).textTheme.bodyMedium,
+                            'Total spent',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colors.onSurfaceVariant),
                           ),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: 4),
                           Text(
                             MoneyUtils.formatMinorUnits(
                               snapshot.monthly.expenseMinor,
-                              currencyCode: 'PKR',
-                              scale: 2,
+                              currencyCode: currency.code,
+                              scale: currency.scale,
                             ),
                             style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ],
                       ),
@@ -319,7 +450,7 @@ class _CategoryChartCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 22),
               for (int index = 0; index < spending.length; index++)
                 _CategoryLegendItem(
                   spending: spending[index],
@@ -327,6 +458,7 @@ class _CategoryChartCard extends StatelessWidget {
                   color: _categoryColor(context, spending[index].categoryId),
                   isSelected: index == touchedIndex,
                   totalMinor: snapshot.monthly.expenseMinor,
+                  currency: currency,
                 ),
             ],
           ],
@@ -349,21 +481,19 @@ class _CategoryChartCard extends StatelessWidget {
     return List<PieChartSectionData>.generate(spending.length, (int index) {
       final CategorySpending item = spending[index];
 
-      final bool isTouched = touchedIndex == index;
+      final bool touched = touchedIndex == index;
 
-      final double percentage = total == 0
-          ? 0
-          : (item.amountMinor / total) * 100;
+      final double percentage = total == 0 ? 0 : item.amountMinor / total * 100;
 
       return PieChartSectionData(
         value: item.amountMinor.toDouble(),
         color: _categoryColor(context, item.categoryId),
-        radius: isTouched ? 72 : 62,
+        radius: touched ? 72 : 62,
         showTitle: percentage >= 7,
         title: '${percentage.toStringAsFixed(0)}%',
         titleStyle: const TextStyle(
           color: Colors.white,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w700,
           fontSize: 12,
         ),
         titlePositionPercentageOffset: 0.58,
@@ -379,18 +509,20 @@ class _CategoryChartCard extends StatelessWidget {
       return Color(category.colorValue);
     }
 
-    final List<Color> fallbacks = <Color>[
-      Theme.of(context).colorScheme.primary,
-      Theme.of(context).colorScheme.secondary,
-      Theme.of(context).colorScheme.tertiary,
-      Colors.orange,
-      Colors.teal,
-      Colors.pink,
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    final List<Color> fallbackColors = <Color>[
+      colors.primary,
+      colors.secondary,
+      colors.tertiary,
+      AppColors.information,
+      AppColors.positive,
+      AppColors.warning,
     ];
 
-    final int index = categoryId.hashCode.abs() % fallbacks.length;
+    final int index = categoryId.hashCode.abs() % fallbackColors.length;
 
-    return fallbacks[index];
+    return fallbackColors[index];
   }
 }
 
@@ -401,6 +533,7 @@ class _CategoryLegendItem extends StatelessWidget {
     required this.color,
     required this.isSelected,
     required this.totalMinor,
+    required this.currency,
   });
 
   final CategorySpending spending;
@@ -408,26 +541,29 @@ class _CategoryLegendItem extends StatelessWidget {
   final Color color;
   final bool isSelected;
   final int totalMinor;
+  final AppCurrency currency;
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
     final double percentage = totalMinor == 0
         ? 0
         : spending.amountMinor / totalMinor * 100;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
       decoration: BoxDecoration(
-        color: isSelected ? color.withValues(alpha: 0.10) : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
+        color: isSelected ? color.withValues(alpha: 0.08) : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: <Widget>[
           Container(
-            width: 13,
-            height: 13,
+            width: 10,
+            height: 10,
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 10),
@@ -443,19 +579,22 @@ class _CategoryLegendItem extends StatelessWidget {
             child: Text(
               category?.name ?? _readableCategoryId(spending.categoryId),
               style: TextStyle(
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
           ),
-          Text('${percentage.toStringAsFixed(1)}%'),
-          const SizedBox(width: 12),
+          Text(
+            '${percentage.toStringAsFixed(1)}%',
+            style: TextStyle(color: colors.onSurfaceVariant),
+          ),
+          const SizedBox(width: 14),
           Text(
             MoneyUtils.formatMinorUnits(
               spending.amountMinor,
-              currencyCode: 'PKR',
-              scale: 2,
+              currencyCode: currency.code,
+              scale: currency.scale,
             ),
-            style: const TextStyle(fontWeight: FontWeight.w600),
+            style: const TextStyle(fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -472,12 +611,15 @@ class _CategoryLegendItem extends StatelessWidget {
 }
 
 class _ComparisonChartCard extends StatelessWidget {
-  const _ComparisonChartCard({required this.snapshot});
+  const _ComparisonChartCard({required this.snapshot, required this.currency});
 
   final AnalyticsSnapshot snapshot;
+  final AppCurrency currency;
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
     final double weeklyExpense = _toMajor(snapshot.weekly.expenseMinor);
 
     final double weeklyIncome = _toMajor(snapshot.weekly.incomeMinor);
@@ -495,34 +637,58 @@ class _ComparisonChartCard extends StatelessWidget {
 
     final double maxY = highest <= 0 ? 100 : highest * 1.25;
 
+    final Color expenseColor = colors.primary;
+    const Color incomeColor = AppColors.positive;
+
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(22),
+        padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              'Income vs Expenses',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Weekly and monthly comparison',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Row(
+            Row(
               children: <Widget>[
-                _BarLegend(color: Colors.redAccent, label: 'Expenses'),
-                SizedBox(width: 20),
-                _BarLegend(color: Colors.green, label: 'Income'),
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: colors.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(Icons.bar_chart_outlined, color: colors.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Income vs Expenses',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Weekly and monthly comparison',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
+            Row(
+              children: <Widget>[
+                _BarLegend(color: expenseColor, label: 'Expenses'),
+                const SizedBox(width: 20),
+                _BarLegend(color: incomeColor, label: 'Income'),
+              ],
+            ),
+            const SizedBox(height: 26),
             SizedBox(
               height: 320,
               child: BarChart(
@@ -536,9 +702,7 @@ class _ComparisonChartCard extends StatelessWidget {
                     horizontalInterval: maxY / 4,
                     getDrawingHorizontalLine: (double value) {
                       return FlLine(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+                        color: colors.outlineVariant.withValues(alpha: 0.55),
                         strokeWidth: 1,
                       );
                     },
@@ -613,11 +777,11 @@ class _ComparisonChartCard extends StatelessWidget {
                                 ? 'Expenses'
                                 : 'Income';
 
-                            final int amountMinor = (rod.toY * 100).round();
+                            final int amountMinor = _toMinorUnits(rod.toY);
 
                             return BarTooltipItem(
                               '$period $type\n'
-                              '${MoneyUtils.formatMinorUnits(amountMinor, currencyCode: 'PKR', scale: 2)}',
+                              '${MoneyUtils.formatMinorUnits(amountMinor, currencyCode: currency.code, scale: currency.scale)}',
                               const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w600,
@@ -631,26 +795,32 @@ class _ComparisonChartCard extends StatelessWidget {
                       x: 0,
                       expense: weeklyExpense,
                       income: weeklyIncome,
+                      expenseColor: expenseColor,
                     ),
                     _barGroup(
                       x: 1,
                       expense: monthlyExpense,
                       income: monthlyIncome,
+                      expenseColor: expenseColor,
                     ),
                   ],
                 ),
                 duration: const Duration(milliseconds: 300),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+            const Divider(),
+            const SizedBox(height: 14),
             _NetSummary(
               label: 'Weekly net',
               amountMinor: snapshot.weekly.netMinor,
+              currency: currency,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             _NetSummary(
               label: 'Monthly net',
               amountMinor: snapshot.monthly.netMinor,
+              currency: currency,
             ),
           ],
         ),
@@ -662,6 +832,7 @@ class _ComparisonChartCard extends StatelessWidget {
     required int x,
     required double expense,
     required double income,
+    required Color expenseColor,
   }) {
     return BarChartGroupData(
       x: x,
@@ -669,14 +840,14 @@ class _ComparisonChartCard extends StatelessWidget {
       barRods: <BarChartRodData>[
         BarChartRodData(
           toY: expense,
-          width: 24,
-          color: Colors.redAccent,
+          width: 23,
+          color: expenseColor,
           borderRadius: BorderRadius.circular(6),
         ),
         BarChartRodData(
           toY: income,
-          width: 24,
-          color: Colors.green,
+          width: 23,
+          color: AppColors.positive,
           borderRadius: BorderRadius.circular(6),
         ),
       ],
@@ -684,19 +855,33 @@ class _ComparisonChartCard extends StatelessWidget {
   }
 
   double _toMajor(int amountMinor) {
-    return amountMinor / 100;
+    return amountMinor / _minorUnitDivisor();
+  }
+
+  int _toMinorUnits(double majorAmount) {
+    return (majorAmount * _minorUnitDivisor()).round();
+  }
+
+  int _minorUnitDivisor() {
+    int divisor = 1;
+
+    for (int index = 0; index < currency.scale; index++) {
+      divisor *= 10;
+    }
+
+    return divisor;
   }
 
   double _highest(List<double> values) {
-    double result = 0;
+    double highest = 0;
 
     for (final double value in values) {
-      if (value > result) {
-        result = value;
+      if (value > highest) {
+        highest = value;
       }
     }
 
-    return result;
+    return highest;
   }
 }
 
@@ -712,8 +897,8 @@ class _BarLegend extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         Container(
-          width: 12,
-          height: 12,
+          width: 11,
+          height: 11,
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(3),
@@ -727,16 +912,21 @@ class _BarLegend extends StatelessWidget {
 }
 
 class _NetSummary extends StatelessWidget {
-  const _NetSummary({required this.label, required this.amountMinor});
+  const _NetSummary({
+    required this.label,
+    required this.amountMinor,
+    required this.currency,
+  });
 
   final String label;
   final int amountMinor;
+  final AppCurrency currency;
 
   @override
   Widget build(BuildContext context) {
     final Color color = amountMinor >= 0
-        ? Colors.green
-        : Theme.of(context).colorScheme.error;
+        ? AppColors.positive
+        : AppColors.danger;
 
     return Row(
       children: <Widget>[
@@ -744,10 +934,10 @@ class _NetSummary extends StatelessWidget {
         Text(
           MoneyUtils.formatMinorUnits(
             amountMinor,
-            currencyCode: 'PKR',
-            scale: 2,
+            currencyCode: currency.code,
+            scale: currency.scale,
           ),
-          style: TextStyle(color: color, fontWeight: FontWeight.bold),
+          style: TextStyle(color: color, fontWeight: FontWeight.w700),
         ),
       ],
     );
@@ -762,20 +952,31 @@ class _ChartEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(
-            icon,
-            size: 54,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: colors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(17),
+            ),
+            child: Icon(icon, size: 30, color: colors.primary),
           ),
-          const SizedBox(height: 14),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyLarge,
+          const SizedBox(height: 16),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
+            ),
           ),
         ],
       ),
@@ -793,24 +994,34 @@ class _AnalyticsError extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            const Icon(Icons.analytics_outlined, size: 64),
-            const SizedBox(height: 16),
-            Text(
-              message,
-              style: Theme.of(context).textTheme.titleLarge,
-              textAlign: TextAlign.center,
+        padding: const EdgeInsets.all(28),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(30),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const Icon(Icons.analytics_outlined, size: 48),
+                  const SizedBox(height: 16),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
-            ),
-          ],
+          ),
         ),
       ),
     );

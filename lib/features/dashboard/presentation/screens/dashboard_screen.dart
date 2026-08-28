@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar_community/isar.dart';
 import 'package:local_database/local_database.dart';
 
+import '../../../../core/currency/app_currency.dart';
+import '../../../../core/currency/default_currency_controller.dart';
 import '../../../../core/db/database_provider.dart';
 import '../../../../core/db/database_service.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -61,6 +63,8 @@ final dashboardBudgetsProvider = StreamProvider<List<BudgetModel>>((
 });
 
 final dashboardYouAreOwedProvider = FutureProvider<int>((ref) async {
+  final AppCurrency currency = ref.watch(defaultCurrencyControllerProvider);
+
   final List<Group> groups = await ref.watch(groupsProvider.future);
 
   const GroupBalanceCalculator calculator = GroupBalanceCalculator();
@@ -68,8 +72,8 @@ final dashboardYouAreOwedProvider = FutureProvider<int>((ref) async {
   int totalOwedMinor = 0;
 
   for (final Group group in groups) {
-    if (group.defaultCurrencyCode.toUpperCase() != 'PKR' ||
-        group.defaultCurrencyScale != 2) {
+    if (group.defaultCurrencyCode.toUpperCase() != currency.code ||
+        group.defaultCurrencyScale != currency.scale) {
       continue;
     }
 
@@ -113,6 +117,8 @@ class DashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final AppCurrency currency = ref.watch(defaultCurrencyControllerProvider);
+
     final AsyncValue<List<ExpenseModel>> expensesAsync = ref.watch(
       dashboardExpensesProvider,
     );
@@ -142,6 +148,7 @@ class DashboardScreen extends ConsumerWidget {
           expenses: expenses,
           budgetsAsync: budgetsAsync,
           owedAsync: owedAsync,
+          currency: currency,
         );
       },
     );
@@ -153,11 +160,13 @@ class _DashboardContent extends StatelessWidget {
     required this.expenses,
     required this.budgetsAsync,
     required this.owedAsync,
+    required this.currency,
   });
 
   final List<ExpenseModel> expenses;
   final AsyncValue<List<BudgetModel>> budgetsAsync;
   final AsyncValue<int> owedAsync;
+  final AppCurrency currency;
 
   @override
   Widget build(BuildContext context) {
@@ -175,14 +184,22 @@ class _DashboardContent extends StatelessWidget {
 
     final DateTime nextWeek = weekStart.add(const Duration(days: 7));
 
+    final List<ExpenseModel> selectedCurrencyExpenses = expenses
+        .where(
+          (ExpenseModel expense) =>
+              expense.currencyCode.toUpperCase() == currency.code &&
+              expense.currencyScale == currency.scale,
+        )
+        .toList(growable: false);
+
     final List<ExpenseModel> monthlyExpenses = _expensesInRange(
-      expenses,
+      selectedCurrencyExpenses,
       monthStart,
       nextMonth,
     );
 
     final List<ExpenseModel> weeklyExpenses = _expensesInRange(
-      expenses,
+      selectedCurrencyExpenses,
       weekStart,
       nextWeek,
     );
@@ -203,6 +220,7 @@ class _DashboardContent extends StatelessWidget {
           budgets: budgets,
           period: BudgetPeriodType.weekly,
           spentMinor: weeklySpentMinor,
+          currency: currency,
         );
       },
     );
@@ -215,6 +233,7 @@ class _DashboardContent extends StatelessWidget {
           budgets: budgets,
           period: BudgetPeriodType.monthly,
           spentMinor: monthlySpentMinor,
+          currency: currency,
         );
       },
     );
@@ -223,7 +242,7 @@ class _DashboardContent extends StatelessWidget {
       loading: () => 'Loading...',
       error: (Object error, StackTrace stackTrace) => 'Unavailable',
       data: (int amountMinor) {
-        return 'PKR ${_formatMoney(amountMinor)}';
+        return '${currency.code} ${_formatMoney(amountMinor)}';
       },
     );
 
@@ -243,14 +262,14 @@ class _DashboardContent extends StatelessWidget {
             _KpiCard(
               icon: Icons.payments_outlined,
               label: 'Spent this month',
-              value: 'PKR ${_formatMoney(monthlySpentMinor)}',
+              value: '${currency.code} ${_formatMoney(monthlySpentMinor)}',
               caption:
                   '${monthlyExpenses.length} ${monthlyExpenses.length == 1 ? 'transaction' : 'transactions'}',
             ),
             _KpiCard(
               icon: Icons.calendar_month_outlined,
               label: 'Monthly remaining',
-              value: _budgetRemainingValue(monthlyBudget),
+              value: _budgetRemainingValue(monthlyBudget, currency.code),
               caption: monthlyBudget == null
                   ? 'No monthly budget'
                   : _budgetStatusText(monthlyBudget),
@@ -258,7 +277,7 @@ class _DashboardContent extends StatelessWidget {
             _KpiCard(
               icon: Icons.date_range_outlined,
               label: 'Weekly remaining',
-              value: _budgetRemainingValue(weeklyBudget),
+              value: _budgetRemainingValue(weeklyBudget, currency.code),
               caption: weeklyBudget == null
                   ? 'No weekly budget'
                   : _budgetStatusText(weeklyBudget),
@@ -267,7 +286,7 @@ class _DashboardContent extends StatelessWidget {
               icon: Icons.groups_outlined,
               label: 'You are owed',
               value: owedValue,
-              caption: 'Across active PKR groups',
+              caption: 'Across active ${currency.code} groups',
             ),
             _KpiCard(
               icon: Icons.receipt_long_outlined,
@@ -308,6 +327,7 @@ class _DashboardContent extends StatelessWidget {
                         nextWeek.subtract(const Duration(days: 1)),
                       ),
                       snapshot: weeklyBudget,
+                      currency: currency,
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -316,6 +336,7 @@ class _DashboardContent extends StatelessWidget {
                       title: 'Monthly budget',
                       periodLabel: '${_monthName(now.month)} ${now.year}',
                       snapshot: monthlyBudget,
+                      currency: currency,
                     ),
                   ),
                 ],
@@ -331,12 +352,14 @@ class _DashboardContent extends StatelessWidget {
                     nextWeek.subtract(const Duration(days: 1)),
                   ),
                   snapshot: weeklyBudget,
+                  currency: currency,
                 ),
                 const SizedBox(height: 16),
                 _BudgetProgressCard(
                   title: 'Monthly budget',
                   periodLabel: '${_monthName(now.month)} ${now.year}',
                   snapshot: monthlyBudget,
+                  currency: currency,
                 ),
               ],
             );
@@ -373,7 +396,10 @@ class _DashboardContent extends StatelessWidget {
                   index < recentExpenses.length;
                   index++
                 ) ...<Widget>[
-                  _RecentExpenseTile(expense: recentExpenses[index]),
+                  _RecentExpenseTile(
+                    expense: recentExpenses[index],
+                    currency: currency,
+                  ),
                   if (index < recentExpenses.length - 1)
                     const Divider(height: 1, indent: 72),
                 ],
@@ -519,11 +545,13 @@ class _BudgetProgressCard extends StatelessWidget {
     required this.title,
     required this.periodLabel,
     required this.snapshot,
+    required this.currency,
   });
 
   final String title;
   final String periodLabel;
   final _BudgetSnapshot? snapshot;
+  final AppCurrency currency;
 
   @override
   Widget build(BuildContext context) {
@@ -562,7 +590,7 @@ class _BudgetProgressCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '$periodLabel • No budget configured',
+                      '$periodLabel â€¢ No budget configured',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: colors.onSurfaceVariant,
                       ),
@@ -640,14 +668,16 @@ class _BudgetProgressCard extends StatelessWidget {
                 Expanded(
                   child: _BudgetMetric(
                     label: 'Spent',
-                    value: 'PKR ${_formatMoney(current.spentMinor)}',
+                    value:
+                        '${currency.code} ${_formatMoney(current.spentMinor)}',
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _BudgetMetric(
                     label: 'Budget',
-                    value: 'PKR ${_formatMoney(current.budgetMinor)}',
+                    value:
+                        '${currency.code} ${_formatMoney(current.budgetMinor)}',
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -656,7 +686,8 @@ class _BudgetProgressCard extends StatelessWidget {
                     label: current.remainingMinor >= 0
                         ? 'Remaining'
                         : 'Over budget',
-                    value: 'PKR ${_formatMoney(current.remainingMinor.abs())}',
+                    value:
+                        '${currency.code} ${_formatMoney(current.remainingMinor.abs())}',
                   ),
                 ),
               ],
@@ -702,9 +733,10 @@ class _BudgetMetric extends StatelessWidget {
 }
 
 class _RecentExpenseTile extends StatelessWidget {
-  const _RecentExpenseTile({required this.expense});
+  const _RecentExpenseTile({required this.expense, required this.currency});
 
   final ExpenseModel expense;
+  final AppCurrency currency;
 
   @override
   Widget build(BuildContext context) {
@@ -733,7 +765,7 @@ class _RecentExpenseTile extends StatelessWidget {
       ),
       subtitle: Text(_formatDate(localDate)),
       trailing: Text(
-        'PKR ${_formatMoney(expense.amountMinor)}',
+        '${currency.code} ${_formatMoney(expense.amountMinor)}',
         style: Theme.of(
           context,
         ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
@@ -855,12 +887,14 @@ _BudgetSnapshot? _createBudgetSnapshot({
   required List<BudgetModel> budgets,
   required BudgetPeriodType period,
   required int spentMinor,
+  required AppCurrency currency,
 }) {
   for (final BudgetModel budget in budgets) {
     if (budget.periodType == period &&
         budget.deletedAt == null &&
         budget.isActive &&
-        budget.currencyCode.toUpperCase() == 'PKR') {
+        budget.currencyCode.toUpperCase() == currency.code &&
+        budget.currencyScale == currency.scale) {
       return _BudgetSnapshot(
         budgetMinor: budget.amountMinor,
         spentMinor: spentMinor,
@@ -893,16 +927,16 @@ int _sumExpenses(List<ExpenseModel> expenses) {
   return total;
 }
 
-String _budgetRemainingValue(_BudgetSnapshot? snapshot) {
+String _budgetRemainingValue(_BudgetSnapshot? snapshot, String currencyCode) {
   if (snapshot == null) {
     return 'Not set';
   }
 
   if (snapshot.remainingMinor < 0) {
-    return 'PKR ${_formatMoney(snapshot.remainingMinor.abs())} over';
+    return '$currencyCode ${_formatMoney(snapshot.remainingMinor.abs())} over';
   }
 
-  return 'PKR ${_formatMoney(snapshot.remainingMinor)}';
+  return '$currencyCode ${_formatMoney(snapshot.remainingMinor)}';
 }
 
 String _budgetStatusText(_BudgetSnapshot snapshot) {
@@ -934,7 +968,7 @@ Color _budgetStatusColor(_BudgetSnapshot snapshot) {
 }
 
 String _weekRangeLabel(DateTime start, DateTime end) {
-  return '${start.day} ${_shortMonthName(start.month)} – '
+  return '${start.day} ${_shortMonthName(start.month)} â€“ '
       '${end.day} ${_shortMonthName(end.month)} ${end.year}';
 }
 

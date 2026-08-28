@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/currency/app_currency.dart';
+import '../../../../core/currency/default_currency_controller.dart';
 import '../../../../core/errors/result.dart';
 import '../../../../core/utils/money_utils.dart';
 import '../../domain/entities/expense.dart';
@@ -28,20 +30,10 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   late final TextEditingController _notesController;
 
   late String _categoryId;
-  late String _currencyCode;
-  late int _currencyScale;
+  String? _currencyCode;
   late DateTime _occurredAtLocal;
 
   bool _isSaving = false;
-
-  static const Map<String, int> _currencies = <String, int>{
-    'PKR': 2,
-    'USD': 2,
-    'EUR': 2,
-    'GBP': 2,
-    'AED': 2,
-    'SAR': 2,
-  };
 
   @override
   void initState() {
@@ -58,8 +50,7 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
     _notesController = TextEditingController(text: expense?.notes ?? '');
 
     _categoryId = expense?.categoryId ?? 'food';
-    _currencyCode = expense?.currencyCode ?? 'PKR';
-    _currencyScale = expense?.currencyScale ?? 2;
+    _currencyCode = expense?.currencyCode;
 
     _occurredAtLocal = expense?.occurredAt.toLocal() ?? DateTime.now();
   }
@@ -76,6 +67,14 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
   Widget build(BuildContext context) {
     final AsyncValue<List<ExpenseCategory>> categories = ref.watch(
       categoryControllerProvider,
+    );
+
+    final AppCurrency defaultCurrency = ref.watch(
+      defaultCurrencyControllerProvider,
+    );
+
+    final AppCurrency selectedCurrency = AppCurrency.fromCode(
+      _currencyCode ?? widget.expense?.currencyCode ?? defaultCurrency.code,
     );
 
     return Scaffold(
@@ -114,12 +113,12 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
                   labelText: 'Amount',
                   hintText: '0.00',
                   prefixIcon: const Icon(Icons.payments_outlined),
-                  prefixText: '$_currencyCode ',
+                  prefixText: '${selectedCurrency.code} ',
                 ),
                 validator: (String? value) {
                   final int? amount = MoneyUtils.parseToMinorUnits(
                     value ?? '',
-                    scale: _currencyScale,
+                    scale: selectedCurrency.scale,
                   );
 
                   if (amount == null || amount <= 0) {
@@ -131,16 +130,19 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                initialValue: _currencyCode,
+                key: ValueKey<String>(
+                  'expense-currency-${selectedCurrency.code}',
+                ),
+                initialValue: selectedCurrency.code,
                 decoration: const InputDecoration(
                   labelText: 'Currency',
                   prefixIcon: Icon(Icons.currency_exchange),
                 ),
-                items: _currencies.keys
+                items: AppCurrency.supported
                     .map(
-                      (String currency) => DropdownMenuItem<String>(
-                        value: currency,
-                        child: Text(currency),
+                      (AppCurrency currency) => DropdownMenuItem<String>(
+                        value: currency.code,
+                        child: Text(currency.label),
                       ),
                     )
                     .toList(growable: false),
@@ -151,7 +153,6 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
 
                   setState(() {
                     _currencyCode = value;
-                    _currencyScale = _currencies[value] ?? 2;
                   });
                 },
               ),
@@ -342,9 +343,17 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
         ? _categoryId
         : categories.first.id;
 
+    final AppCurrency defaultCurrency = ref.read(
+      defaultCurrencyControllerProvider,
+    );
+
+    final AppCurrency selectedCurrency = AppCurrency.fromCode(
+      _currencyCode ?? widget.expense?.currencyCode ?? defaultCurrency.code,
+    );
+
     final int? amountMinor = MoneyUtils.parseToMinorUnits(
       _amountController.text,
-      scale: _currencyScale,
+      scale: selectedCurrency.scale,
     );
 
     if (amountMinor == null) {
@@ -364,8 +373,8 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
           .createExpense(
             title: _titleController.text,
             amountMinor: amountMinor,
-            currencyCode: _currencyCode,
-            currencyScale: _currencyScale,
+            currencyCode: selectedCurrency.code,
+            currencyScale: selectedCurrency.scale,
             categoryId: categoryId,
             occurredAt: _occurredAtLocal,
             notes: _notesController.text,
@@ -377,8 +386,8 @@ class _ExpenseFormScreenState extends ConsumerState<ExpenseFormScreen> {
             existing: widget.expense!,
             title: _titleController.text,
             amountMinor: amountMinor,
-            currencyCode: _currencyCode,
-            currencyScale: _currencyScale,
+            currencyCode: selectedCurrency.code,
+            currencyScale: selectedCurrency.scale,
             categoryId: categoryId,
             occurredAt: _occurredAtLocal,
             notes: _notesController.text,

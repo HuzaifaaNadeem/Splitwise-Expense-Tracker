@@ -1,11 +1,20 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/currency/app_currency.dart';
+import '../../../../core/currency/default_currency_controller.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../expenses/presentation/screens/expense_settings_screen.dart';
+import '../../../group_splits/domain/entities/group.dart';
+import '../../../group_splits/presentation/providers/group_providers.dart';
+import '../../../group_splits/presentation/screens/group_details_screen.dart';
+import '../../../group_splits/presentation/widgets/group_pdf_export_button.dart';
 
 enum _SettingsSection { general, appearance, budgeting, data, reports, about }
 
@@ -21,18 +30,25 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   _SettingsSection _selectedSection = _SettingsSection.general;
 
+  late final Future<Directory> _dataDirectoryFuture;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _dataDirectoryFuture = getApplicationSupportDirectory();
+  }
+
   @override
   Widget build(BuildContext context) {
     final Widget content = LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final bool wide = constraints.maxWidth >= 900;
-
-        if (wide) {
+        if (constraints.maxWidth >= 900) {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               SizedBox(
-                width: 250,
+                width: 260,
                 child: _SettingsSidebar(
                   selectedSection: _selectedSection,
                   onSelected: _selectSection,
@@ -46,7 +62,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
         return Column(
           children: <Widget>[
-            _CompactSettingsNavigation(
+            _MobileSectionSelector(
               selectedSection: _selectedSection,
               onSelected: _selectSection,
             ),
@@ -75,24 +91,118 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Widget _buildSection() {
     return switch (_selectedSection) {
-      _SettingsSection.general => const _GeneralSettings(),
-      _SettingsSection.appearance => const _AppearanceSettings(),
-      _SettingsSection.budgeting => _BudgetingSettings(
-        onOpenBudgetManager: _openBudgetManager,
+      _SettingsSection.general => _GeneralSettings(
+        onAppearance: () {
+          _selectSection(_SettingsSection.appearance);
+        },
+        onBudgeting: () {
+          unawaited(_openBudgetSettings());
+        },
+        onData: () {
+          _selectSection(_SettingsSection.data);
+        },
+        onReports: () {
+          _selectSection(_SettingsSection.reports);
+        },
       ),
-      _SettingsSection.data => const _DataSettings(),
+      _SettingsSection.appearance => const _AppearanceSettings(),
+      _SettingsSection.budgeting => _BudgetSettings(
+        onManage: () {
+          unawaited(_openBudgetSettings());
+        },
+      ),
+      _SettingsSection.data => _DataSettings(
+        directoryFuture: _dataDirectoryFuture,
+        onCopyPath: () {
+          unawaited(_copyDataPath());
+        },
+        onOpenFolder: () {
+          unawaited(_openDataFolder());
+        },
+      ),
       _SettingsSection.reports => const _ReportsSettings(),
-      _SettingsSection.about => const _AboutSettings(),
+      _SettingsSection.about => _AboutSettings(
+        onCopyInfo: () {
+          unawaited(_copyAppInfo());
+        },
+      ),
     };
   }
 
-  Future<void> _openBudgetManager() async {
+  Future<void> _openBudgetSettings() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (BuildContext context) {
           return const ExpenseSettingsScreen();
         },
       ),
+    );
+  }
+
+  Future<void> _copyDataPath() async {
+    final Directory directory = await _dataDirectoryFuture;
+
+    await Clipboard.setData(ClipboardData(text: directory.path));
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Application data path copied.')),
+    );
+  }
+
+  Future<void> _openDataFolder() async {
+    final Directory directory = await _dataDirectoryFuture;
+
+    if (Platform.isWindows) {
+      await Process.run('explorer.exe', <String>[directory.path]);
+    } else if (Platform.isMacOS) {
+      await Process.run('open', <String>[directory.path]);
+    } else if (Platform.isLinux) {
+      await Process.run('xdg-open', <String>[directory.path]);
+    } else {
+      await Clipboard.setData(ClipboardData(text: directory.path));
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'The data path was copied. '
+            'Opening the folder directly is available on desktop.',
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Application data folder opened.')),
+    );
+  }
+
+  Future<void> _copyAppInfo() async {
+    const String version = '1.0.0';
+
+    await Clipboard.setData(
+      const ClipboardData(text: '${AppConstants.appName} - Version $version'),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Application information copied.')),
     );
   }
 }
@@ -110,67 +220,44 @@ class _SettingsSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final ColorScheme colors = Theme.of(context).colorScheme;
 
-    return ColoredBox(
+    return Material(
       color: colors.surface,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(18, 24, 18, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Text(
                 'Settings',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-            _SettingsMenuItem(
-              section: _SettingsSection.general,
-              selectedSection: selectedSection,
-              icon: Icons.tune_outlined,
-              label: 'General',
-              onSelected: onSelected,
-            ),
-            _SettingsMenuItem(
-              section: _SettingsSection.appearance,
-              selectedSection: selectedSection,
-              icon: Icons.palette_outlined,
-              label: 'Appearance',
-              onSelected: onSelected,
-            ),
-            _SettingsMenuItem(
-              section: _SettingsSection.budgeting,
-              selectedSection: selectedSection,
-              icon: Icons.account_balance_wallet_outlined,
-              label: 'Budgets & categories',
-              onSelected: onSelected,
-            ),
-            _SettingsMenuItem(
-              section: _SettingsSection.data,
-              selectedSection: selectedSection,
-              icon: Icons.storage_outlined,
-              label: 'Data & backup',
-              onSelected: onSelected,
-            ),
-            _SettingsMenuItem(
-              section: _SettingsSection.reports,
-              selectedSection: selectedSection,
-              icon: Icons.description_outlined,
-              label: 'Export & reports',
-              onSelected: onSelected,
-            ),
-            const Spacer(),
-            const Divider(),
             const SizedBox(height: 8),
-            _SettingsMenuItem(
-              section: _SettingsSection.about,
-              selectedSection: selectedSection,
-              icon: Icons.info_outline,
-              label: 'About',
-              onSelected: onSelected,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text(
+                'Configure your financial workspace.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
             ),
+            const SizedBox(height: 24),
+            for (final _SettingsSection section in _SettingsSection.values)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: _SidebarItem(
+                  section: section,
+                  selected: section == selectedSection,
+                  onTap: () {
+                    onSelected(section);
+                  },
+                ),
+              ),
           ],
         ),
       ),
@@ -178,59 +265,49 @@ class _SettingsSidebar extends StatelessWidget {
   }
 }
 
-class _SettingsMenuItem extends StatelessWidget {
-  const _SettingsMenuItem({
+class _SidebarItem extends StatelessWidget {
+  const _SidebarItem({
     required this.section,
-    required this.selectedSection,
-    required this.icon,
-    required this.label,
-    required this.onSelected,
+    required this.selected,
+    required this.onTap,
   });
 
   final _SettingsSection section;
-  final _SettingsSection selectedSection;
-  final IconData icon;
-  final String label;
-  final ValueChanged<_SettingsSection> onSelected;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final bool selected = section == selectedSection;
     final ColorScheme colors = Theme.of(context).colorScheme;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Material(
-        color: selected
-            ? colors.primary.withValues(alpha: 0.10)
-            : Colors.transparent,
+    return Material(
+      color: selected
+          ? colors.primary.withValues(alpha: 0.09)
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(10),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: () {
-            onSelected(section);
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            child: Row(
-              children: <Widget>[
-                Icon(
-                  icon,
-                  size: 21,
-                  color: selected ? colors.primary : colors.onSurfaceVariant,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      color: selected ? colors.primary : colors.onSurface,
-                    ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                _sectionIcon(section),
+                size: 20,
+                color: selected ? colors.primary : colors.onSurfaceVariant,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  _sectionTitle(section),
+                  style: TextStyle(
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? colors.primary : null,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -238,8 +315,8 @@ class _SettingsMenuItem extends StatelessWidget {
   }
 }
 
-class _CompactSettingsNavigation extends StatelessWidget {
-  const _CompactSettingsNavigation({
+class _MobileSectionSelector extends StatelessWidget {
+  const _MobileSectionSelector({
     required this.selectedSection,
     required this.onSelected,
   });
@@ -250,117 +327,205 @@ class _CompactSettingsNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 64,
+      height: 66,
       child: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         scrollDirection: Axis.horizontal,
         children: <Widget>[
-          _SectionChip(
-            label: 'General',
-            section: _SettingsSection.general,
-            selectedSection: selectedSection,
-            onSelected: onSelected,
-          ),
-          _SectionChip(
-            label: 'Appearance',
-            section: _SettingsSection.appearance,
-            selectedSection: selectedSection,
-            onSelected: onSelected,
-          ),
-          _SectionChip(
-            label: 'Budgets',
-            section: _SettingsSection.budgeting,
-            selectedSection: selectedSection,
-            onSelected: onSelected,
-          ),
-          _SectionChip(
-            label: 'Data',
-            section: _SettingsSection.data,
-            selectedSection: selectedSection,
-            onSelected: onSelected,
-          ),
-          _SectionChip(
-            label: 'Reports',
-            section: _SettingsSection.reports,
-            selectedSection: selectedSection,
-            onSelected: onSelected,
-          ),
-          _SectionChip(
-            label: 'About',
-            section: _SettingsSection.about,
-            selectedSection: selectedSection,
-            onSelected: onSelected,
-          ),
+          for (final _SettingsSection section in _SettingsSection.values)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                selected: selectedSection == section,
+                onSelected: (bool selected) {
+                  if (selected) {
+                    onSelected(section);
+                  }
+                },
+                avatar: Icon(_sectionIcon(section), size: 18),
+                label: Text(_sectionTitle(section)),
+              ),
+            ),
         ],
       ),
     );
   }
 }
 
-class _SectionChip extends StatelessWidget {
-  const _SectionChip({
-    required this.label,
-    required this.section,
-    required this.selectedSection,
-    required this.onSelected,
+class _GeneralSettings extends ConsumerWidget {
+  const _GeneralSettings({
+    required this.onAppearance,
+    required this.onBudgeting,
+    required this.onData,
+    required this.onReports,
   });
 
-  final String label;
-  final _SettingsSection section;
-  final _SettingsSection selectedSection;
-  final ValueChanged<_SettingsSection> onSelected;
+  final VoidCallback onAppearance;
+  final VoidCallback onBudgeting;
+  final VoidCallback onData;
+  final VoidCallback onReports;
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selectedSection == section,
-        onSelected: (bool selected) {
-          if (selected) {
-            onSelected(section);
-          }
-        },
-      ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ThemeMode themeMode = ref.watch(themeControllerProvider);
+
+    final AppCurrency defaultCurrency = ref.watch(
+      defaultCurrencyControllerProvider,
     );
+
+    return _SettingsPage(
+      title: 'General',
+      subtitle: 'Frequently used workspace controls and shortcuts.',
+      children: <Widget>[
+        _InteractiveSettingCard(
+          icon: Icons.palette_outlined,
+          title: 'Appearance',
+          description: 'Current theme: ${_themeName(themeMode)}',
+          buttonLabel: 'Change appearance',
+          onPressed: onAppearance,
+        ),
+        _CurrencySettingCard(
+          currency: defaultCurrency,
+          onChanged: (String code) {
+            unawaited(_changeDefaultCurrency(context, ref, code));
+          },
+        ),
+        _InteractiveSettingCard(
+          icon: Icons.account_balance_wallet_outlined,
+          title: 'Budgets & categories',
+          description:
+              'Configure weekly and monthly budgets and manage expense categories.',
+          buttonLabel: 'Manage budgets',
+          onPressed: onBudgeting,
+        ),
+        _InteractiveSettingCard(
+          icon: Icons.storage_outlined,
+          title: 'Local data',
+          description:
+              'View the location where the offline application data is stored.',
+          buttonLabel: 'Data & storage',
+          onPressed: onData,
+        ),
+        _InteractiveSettingCard(
+          icon: Icons.picture_as_pdf_outlined,
+          title: 'Reports',
+          description: 'Generate PDF reports from your active expense groups.',
+          buttonLabel: 'Open reports',
+          onPressed: onReports,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _changeDefaultCurrency(
+    BuildContext context,
+    WidgetRef ref,
+    String code,
+  ) async {
+    final bool persisted = await ref
+        .read(defaultCurrencyControllerProvider.notifier)
+        .setCurrency(code);
+
+    if (!context.mounted) {
+      return;
+    }
+
+    final AppCurrency currency = ref.read(defaultCurrencyControllerProvider);
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            persisted
+                ? 'Default currency changed to ${currency.code}.'
+                : 'Default currency changed to ${currency.code} for this '
+                      'session, but it could not be saved on this device.',
+          ),
+        ),
+      );
   }
 }
 
-class _GeneralSettings extends StatelessWidget {
-  const _GeneralSettings();
+class _CurrencySettingCard extends StatelessWidget {
+  const _CurrencySettingCard({required this.currency, required this.onChanged});
+
+  final AppCurrency currency;
+  final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return const _SettingsPage(
-      title: 'General',
-      description: 'Core application preferences and financial defaults.',
-      children: <Widget>[
-        _SettingsCard(
-          icon: Icons.currency_exchange_outlined,
-          title: 'Default currency',
-          subtitle: 'Pakistani Rupee (PKR)',
-          trailing: Text('PKR', style: TextStyle(fontWeight: FontWeight.w700)),
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const _SettingIcon(icon: Icons.currency_exchange_outlined),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Default currency',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    'Used automatically for new personal expenses, new '
+                    'budgets, and new groups. Existing records are not '
+                    'converted or rewritten.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 360),
+                    child: DropdownButtonFormField<String>(
+                      key: ValueKey<String>(
+                        'default-currency-${currency.code}',
+                      ),
+                      initialValue: currency.code,
+                      decoration: const InputDecoration(
+                        labelText: 'Currency',
+                        prefixIcon: Icon(Icons.payments_outlined),
+                      ),
+                      items: AppCurrency.supported
+                          .map(
+                            (AppCurrency option) => DropdownMenuItem<String>(
+                              value: option.code,
+                              child: Text(option.label),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (String? value) {
+                        if (value != null && value != currency.code) {
+                          onChanged(value);
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Dashboard and analytics show only records in the '
+                    'selected default currency. No exchange-rate conversion '
+                    'is performed.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        SizedBox(height: 12),
-        _SettingsCard(
-          icon: Icons.calendar_today_outlined,
-          title: 'Week starts on',
-          subtitle: 'Weekly budget periods begin every Monday.',
-          trailing: Text(
-            'Monday',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ),
-        SizedBox(height: 12),
-        _SettingsCard(
-          icon: Icons.offline_bolt_outlined,
-          title: 'Offline-first mode',
-          subtitle:
-              'Your core expense data remains available without an internet connection.',
-          trailing: Icon(Icons.check_circle_outline),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -370,32 +535,66 @@ class _AppearanceSettings extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ThemeMode mode = ref.watch(themeControllerProvider);
+    final ThemeMode themeMode = ref.watch(themeControllerProvider);
+
+    final ThemeController controller = ref.read(
+      themeControllerProvider.notifier,
+    );
+
+    final bool followsSystem = themeMode == ThemeMode.system;
 
     return _SettingsPage(
       title: 'Appearance',
-      description: 'Choose how the application looks across your devices.',
+      subtitle: 'Choose how the application looks on this device.',
       children: <Widget>[
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(22),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: const Icon(Icons.brightness_auto_outlined),
+                  title: const Text(
+                    'Follow system appearance',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: const Text(
+                    'Automatically use the operating system light or dark mode.',
+                  ),
+                  value: followsSystem,
+                  onChanged: (bool enabled) {
+                    if (enabled) {
+                      controller.useSystemTheme();
+                      return;
+                    }
+
+                    final Brightness brightness =
+                        MediaQuery.platformBrightnessOf(context);
+
+                    if (brightness == Brightness.dark) {
+                      controller.useDarkTheme();
+                    } else {
+                      controller.useLightTheme();
+                    }
+                  },
+                ),
+                const Divider(height: 30),
                 Text(
-                  'Theme',
+                  'Theme mode',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Use your system preference or choose a fixed appearance.',
+                  'Changes are applied immediately.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 18),
                 SegmentedButton<ThemeMode>(
                   segments: const <ButtonSegment<ThemeMode>>[
                     ButtonSegment<ThemeMode>(
@@ -414,23 +613,30 @@ class _AppearanceSettings extends ConsumerWidget {
                       label: Text('Dark'),
                     ),
                   ],
-                  selected: <ThemeMode>{mode},
-                  onSelectionChanged: (Set<ThemeMode> selection) {
-                    final ThemeMode selected = selection.first;
+                  selected: <ThemeMode>{themeMode},
+                  onSelectionChanged: (Set<ThemeMode> selected) {
+                    final ThemeMode mode = selected.first;
 
-                    final controller = ref.read(
-                      themeControllerProvider.notifier,
-                    );
-
-                    switch (selected) {
+                    switch (mode) {
                       case ThemeMode.system:
                         controller.useSystemTheme();
+
                       case ThemeMode.light:
                         controller.useLightTheme();
+
                       case ThemeMode.dark:
                         controller.useDarkTheme();
                     }
                   },
+                ),
+                const SizedBox(height: 18),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: controller.useSystemTheme,
+                    icon: const Icon(Icons.restart_alt),
+                    label: const Text('Reset to system'),
+                  ),
                 ),
               ],
             ),
@@ -441,52 +647,53 @@ class _AppearanceSettings extends ConsumerWidget {
   }
 }
 
-class _BudgetingSettings extends StatelessWidget {
-  const _BudgetingSettings({required this.onOpenBudgetManager});
+class _BudgetSettings extends StatelessWidget {
+  const _BudgetSettings({required this.onManage});
 
-  final Future<void> Function() onOpenBudgetManager;
+  final VoidCallback onManage;
 
   @override
   Widget build(BuildContext context) {
     return _SettingsPage(
       title: 'Budgets & categories',
-      description: 'Control spending limits and organise transactions.',
+      subtitle:
+          'Configure real spending limits and the categories used by expenses.',
       children: <Widget>[
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
+            padding: const EdgeInsets.all(24),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Icon(
-                      Icons.account_balance_wallet_outlined,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Spending controls',
+                _SettingIcon(icon: Icons.account_balance_wallet_outlined),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Budget manager',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Configure weekly and monthly budgets, monitor remaining amounts, and manage expense categories.',
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: () {
-                    unawaited(onOpenBudgetManager());
-                  },
-                  icon: const Icon(Icons.tune_outlined),
-                  label: const Text('Manage budgets & categories'),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Create or update weekly and monthly budgets, '
+                        'review current spending progress, and manage '
+                        'your expense categories.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      FilledButton.icon(
+                        onPressed: onManage,
+                        icon: const Icon(Icons.tune),
+                        label: const Text('Manage budgets & categories'),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -498,53 +705,108 @@ class _BudgetingSettings extends StatelessWidget {
 }
 
 class _DataSettings extends StatelessWidget {
-  const _DataSettings();
+  const _DataSettings({
+    required this.directoryFuture,
+    required this.onCopyPath,
+    required this.onOpenFolder,
+  });
+
+  final Future<Directory> directoryFuture;
+  final VoidCallback onCopyPath;
+  final VoidCallback onOpenFolder;
 
   @override
   Widget build(BuildContext context) {
     return _SettingsPage(
-      title: 'Data & backup',
-      description:
-          'Understand where your information is stored and prepare for backup features.',
+      title: 'Data & storage',
+      subtitle:
+          'Inspect the local storage used by this offline-first application.',
       children: <Widget>[
-        const _SettingsCard(
-          icon: Icons.storage_outlined,
-          title: 'Local database',
-          subtitle: 'Expense and group data is stored locally using Isar.',
-          trailing: Icon(Icons.check_circle_outline),
-        ),
-        const SizedBox(height: 12),
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                Text(
-                  'Backup & restore',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const _SettingIcon(icon: Icons.folder_outlined),
+                    const SizedBox(width: 18),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            'Application data folder',
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Your local Isar database and application '
+                            'support data are stored on this device.',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Automatic backup and restore are not enabled in this build yet. They should be implemented before enterprise deployment.',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                const SizedBox(height: 22),
+                FutureBuilder<Directory>(
+                  future: directoryFuture,
+                  builder:
+                      (
+                        BuildContext context,
+                        AsyncSnapshot<Directory> snapshot,
+                      ) {
+                        final String value;
+
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          value = 'Loading data path...';
+                        } else if (snapshot.hasError) {
+                          value = 'Unable to resolve data path.';
+                        } else {
+                          value = snapshot.data?.path ?? 'Unavailable';
+                        }
+
+                        return Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: SelectableText(
+                            value,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(fontFamily: 'monospace'),
+                          ),
+                        );
+                      },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
                 Wrap(
                   spacing: 12,
                   runSpacing: 12,
                   children: <Widget>[
                     FilledButton.tonalIcon(
-                      onPressed: null,
-                      icon: const Icon(Icons.backup_outlined),
-                      label: const Text('Create backup'),
+                      onPressed: onOpenFolder,
+                      icon: const Icon(Icons.folder_open_outlined),
+                      label: const Text('Open data folder'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: null,
-                      icon: const Icon(Icons.restore_outlined),
-                      label: const Text('Restore backup'),
+                      onPressed: onCopyPath,
+                      icon: const Icon(Icons.copy_outlined),
+                      label: const Text('Copy path'),
                     ),
                   ],
                 ),
@@ -552,112 +814,232 @@ class _DataSettings extends StatelessWidget {
             ),
           ),
         ),
+        const _InformationCard(
+          icon: Icons.security_outlined,
+          title: 'Offline-first storage',
+          message:
+              'Expense and group data stays in the local application database. '
+              'A safe database snapshot/restore workflow should be implemented '
+              'before exposing one-click backup and restore.',
+        ),
       ],
     );
   }
 }
 
-class _ReportsSettings extends StatelessWidget {
+class _ReportsSettings extends ConsumerWidget {
   const _ReportsSettings();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<List<Group>> groupsAsync = ref.watch(groupsProvider);
+
     return _SettingsPage(
       title: 'Export & reports',
-      description: 'Generate professional records from your financial data.',
+      subtitle: 'Generate PDF reports directly from your existing groups.',
       children: <Widget>[
-        const _SettingsCard(
-          icon: Icons.picture_as_pdf_outlined,
-          title: 'Group PDF reports',
-          subtitle:
-              'PDF reports can be generated from individual group screens.',
-          trailing: Icon(Icons.check_circle_outline),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'Enterprise exports',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+        groupsAsync.when(
+          loading: () {
+            return const Card(
+              child: Padding(
+                padding: EdgeInsets.all(36),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            );
+          },
+          error: (Object error, StackTrace stackTrace) {
+            return Card(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Icon(Icons.error_outline),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Unable to load groups.',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: () {
+                        ref.invalidate(groupsProvider);
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+          data: (List<Group> groups) {
+            if (groups.isEmpty) {
+              return const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(30),
+                  child: Column(
+                    children: <Widget>[
+                      Icon(Icons.picture_as_pdf_outlined, size: 42),
+                      SizedBox(height: 14),
+                      Text(
+                        'No groups available for reporting',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        'Create a shared expense group first.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'CSV, Excel and organisation-level reports can be added in the enterprise edition.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
+              );
+            }
+
+            return Column(
+              children: <Widget>[
+                for (final Group group in groups)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _GroupReportCard(group: group),
+                  ),
               ],
-            ),
-          ),
+            );
+          },
         ),
       ],
+    );
+  }
+}
+
+class _GroupReportCard extends StatelessWidget {
+  const _GroupReportCard({required this.group});
+
+  final Group group;
+
+  @override
+  Widget build(BuildContext context) {
+    final int memberCount = group.activeMembers.length;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: <Widget>[
+            _SettingIcon(icon: Icons.groups_outlined),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    group.name,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$memberCount '
+                    '${memberCount == 1 ? 'member' : 'members'} '
+                    'â€¢ ${group.defaultCurrencyCode}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: <Widget>[
+                OutlinedButton.icon(
+                  onPressed: () {
+                    unawaited(
+                      Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (BuildContext context) {
+                            return GroupDetailsScreen(groupId: group.id);
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('Open'),
+                ),
+                GroupPdfExportButton(group: group),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
 class _AboutSettings extends StatelessWidget {
-  const _AboutSettings();
+  const _AboutSettings({required this.onCopyInfo});
+
+  final VoidCallback onCopyInfo;
 
   @override
   Widget build(BuildContext context) {
     return _SettingsPage(
       title: 'About',
-      description: 'Application and product information.',
+      subtitle: 'Application information and technology overview.',
       children: <Widget>[
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Row(
+            padding: const EdgeInsets.all(26),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Container(
-                  width: 58,
-                  height: 58,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(
-                    Icons.account_balance_wallet_outlined,
-                    color: Theme.of(context).colorScheme.onPrimary,
-                  ),
+                Row(
+                  children: <Widget>[
+                    const _SettingIcon(
+                      icon: Icons.account_balance_wallet_outlined,
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            AppConstants.appName,
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 3),
+                          const Text('Version 1.0.0'),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        AppConstants.appName,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Version 1.0.0',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
+                const SizedBox(height: 22),
+                const Divider(),
+                const SizedBox(height: 18),
+                const _AboutRow(label: 'Platform', value: 'Flutter'),
+                const SizedBox(height: 12),
+                const _AboutRow(label: 'Storage', value: 'Isar Community'),
+                const SizedBox(height: 12),
+                const _AboutRow(label: 'State management', value: 'Riverpod'),
+                const SizedBox(height: 12),
+                const _AboutRow(label: 'Operation', value: 'Offline-first'),
+                const SizedBox(height: 22),
+                OutlinedButton.icon(
+                  onPressed: onCopyInfo,
+                  icon: const Icon(Icons.copy_outlined),
+                  label: const Text('Copy app information'),
                 ),
               ],
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        const _SettingsCard(
-          icon: Icons.shield_outlined,
-          title: 'Offline-first architecture',
-          subtitle:
-              'Designed around local persistence and private on-device financial data.',
-          trailing: Icon(Icons.check_circle_outline),
         ),
       ],
     );
@@ -667,81 +1049,221 @@ class _AboutSettings extends StatelessWidget {
 class _SettingsPage extends StatelessWidget {
   const _SettingsPage({
     required this.title,
-    required this.description,
+    required this.subtitle,
     required this.children,
   });
 
   final String title;
-  final String description;
+  final String subtitle;
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
     return ListView(
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.fromLTRB(28, 28, 28, 48),
       children: <Widget>[
         Text(
           title,
           style: Theme.of(
             context,
-          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+          ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 6),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 700),
-          child: Text(
-            description,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
+        Text(
+          subtitle,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
         ),
-        const SizedBox(height: 28),
-        ...children,
+        const SizedBox(height: 26),
+        ...children.expand((Widget child) {
+          return <Widget>[child, const SizedBox(height: 14)];
+        }),
       ],
     );
   }
 }
 
-class _SettingsCard extends StatelessWidget {
-  const _SettingsCard({
+class _InteractiveSettingCard extends StatelessWidget {
+  const _InteractiveSettingCard({
     required this.icon,
     required this.title,
-    required this.subtitle,
-    required this.trailing,
+    required this.description,
+    required this.buttonLabel,
+    required this.onPressed,
   });
 
   final IconData icon;
   final String title;
-  final String subtitle;
-  final Widget trailing;
+  final String description;
+  final String buttonLabel;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
     return Card(
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: 10,
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            _SettingIcon(icon: icon),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    description,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: onPressed,
+                    icon: const Icon(Icons.arrow_forward),
+                    label: Text(buttonLabel),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        leading: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: Theme.of(
-              context,
-            ).colorScheme.primary.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: Theme.of(context).colorScheme.primary),
-        ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(subtitle),
-        ),
-        trailing: trailing,
       ),
     );
   }
+}
+
+class _SettingIcon extends StatelessWidget {
+  const _SettingIcon({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    return Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        color: colors.primary.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, size: 22, color: colors.primary),
+    );
+  }
+}
+
+class _InformationCard extends StatelessWidget {
+  const _InformationCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    return Card(
+      color: colors.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(icon, color: colors.primary),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    message,
+                    style: TextStyle(color: colors.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AboutRow extends StatelessWidget {
+  const _AboutRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+}
+
+IconData _sectionIcon(_SettingsSection section) {
+  return switch (section) {
+    _SettingsSection.general => Icons.settings_outlined,
+    _SettingsSection.appearance => Icons.palette_outlined,
+    _SettingsSection.budgeting => Icons.account_balance_wallet_outlined,
+    _SettingsSection.data => Icons.storage_outlined,
+    _SettingsSection.reports => Icons.picture_as_pdf_outlined,
+    _SettingsSection.about => Icons.info_outline,
+  };
+}
+
+String _sectionTitle(_SettingsSection section) {
+  return switch (section) {
+    _SettingsSection.general => 'General',
+    _SettingsSection.appearance => 'Appearance',
+    _SettingsSection.budgeting => 'Budgets & categories',
+    _SettingsSection.data => 'Data & storage',
+    _SettingsSection.reports => 'Export & reports',
+    _SettingsSection.about => 'About',
+  };
+}
+
+String _themeName(ThemeMode mode) {
+  return switch (mode) {
+    ThemeMode.system => 'System',
+    ThemeMode.light => 'Light',
+    ThemeMode.dark => 'Dark',
+  };
 }

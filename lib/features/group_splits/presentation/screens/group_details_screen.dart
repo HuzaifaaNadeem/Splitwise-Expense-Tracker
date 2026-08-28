@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/errors/result.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../domain/entities/debt_settlement.dart';
 import '../../domain/entities/group.dart';
 import '../../domain/entities/group_member.dart';
@@ -242,8 +243,8 @@ class GroupDetailsScreen extends ConsumerWidget {
         return AlertDialog(
           title: const Text('Remove member?'),
           content: Text(
-            'Remove “${member.displayName}” from '
-            '“${group.name}”?\n\n'
+            'Remove "${member.displayName}" from '
+            '"${group.name}"?\n\n'
             'Existing expense records involving this '
             'member will remain available.',
           ),
@@ -458,7 +459,7 @@ class GroupDetailsScreen extends ConsumerWidget {
             settlementPayment
                 ? 'Deleting this payment will restore '
                       'the previous outstanding balances.'
-                : 'Delete “${split.title}” from this group?',
+                : 'Delete "${split.title}" from this group?',
           ),
           actions: <Widget>[
             TextButton(
@@ -531,7 +532,7 @@ class GroupDetailsScreen extends ConsumerWidget {
         return AlertDialog(
           title: const Text('Archive group?'),
           content: Text(
-            '“${group.name}” will be removed from your '
+            '"${group.name}" will be removed from your '
             'active groups. Existing records will remain.',
           ),
           actions: <Widget>[
@@ -586,7 +587,7 @@ class GroupDetailsScreen extends ConsumerWidget {
         return AlertDialog(
           title: const Text('Delete group?'),
           content: Text(
-            'This will remove “${group.name}” '
+            'This will remove "${group.name}" '
             'from the active group list.',
           ),
           actions: <Widget>[
@@ -996,103 +997,33 @@ class _GroupDetailsContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
     final List<GroupMember> activeMembers = group.activeMembers;
-
-    final String initial = group.name.trim().isEmpty
-        ? '?'
-        : group.name.trim().substring(0, 1).toUpperCase();
 
     return ListView(
       key: const Key('group_details_list'),
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+      padding: const EdgeInsets.fromLTRB(28, 24, 28, 48),
       children: <Widget>[
-        Center(
-          child: CircleAvatar(
-            radius: 42,
-            child: Text(
-              initial,
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+        _GroupOverviewCard(
+          group: group,
+          activeMemberCount: activeMembers.length,
+        ),
+        const SizedBox(height: 30),
+        _SectionHeader(
+          title: 'Group expenses',
+          subtitle: 'Shared transactions recorded for this group.',
+          titleKey: const Key('group_expenses_heading'),
+          action: FilledButton.icon(
+            key: const Key('add_group_expense_button'),
+            onPressed: activeMembers.isEmpty ? null : onAddExpense,
+            icon: const Icon(Icons.add),
+            label: const Text('Add expense'),
           ),
         ),
-        const SizedBox(height: 16),
-        Text(
-          group.name,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        if (group.description != null &&
-            group.description!.trim().isNotEmpty) ...<Widget>[
-          const SizedBox(height: 8),
-          Text(group.description!, textAlign: TextAlign.center),
-        ],
-        const SizedBox(height: 24),
-        Card(
-          child: Column(
-            children: <Widget>[
-              _InfoTile(
-                icon: Icons.payments_outlined,
-                title: 'Currency',
-                value: group.defaultCurrencyCode,
-              ),
-              const Divider(height: 1),
-              _InfoTile(
-                icon: Icons.groups_outlined,
-                title: 'Members',
-                value: '${activeMembers.length}',
-              ),
-              const Divider(height: 1),
-              _InfoTile(
-                icon: Icons.calendar_today_outlined,
-                title: 'Created',
-                value: _formatDate(group.createdAt),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 28),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                'Group expenses',
-                key: const Key('group_expenses_heading'),
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            FilledButton.icon(
-              key: const Key('add_group_expense_button'),
-              onPressed: activeMembers.isEmpty ? null : onAddExpense,
-              icon: const Icon(Icons.add),
-              label: const Text('Add expense'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         splitsAsync.when(
-          loading: () => const Card(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          ),
-          error: (Object error, StackTrace stackTrace) => Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                'Unable to load expenses: '
-                '$error',
-              ),
-            ),
-          ),
+          loading: () => const _SectionLoadingCard(),
+          error: (Object error, StackTrace stackTrace) =>
+              _SectionErrorCard(message: 'Unable to load expenses: $error'),
           data: (List<GroupSplit> splits) {
             final List<GroupSplit> expenses = splits
                 .where((GroupSplit split) => !_isSettlementPayment(split))
@@ -1102,69 +1033,55 @@ class _GroupDetailsContent extends StatelessWidget {
               return const Card(
                 key: Key('group_expenses_empty_state'),
                 child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Column(
-                    children: <Widget>[
-                      Icon(Icons.receipt_long_outlined, size: 40),
-                      SizedBox(height: 12),
-                      Text(
-                        'No group expenses yet',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 6),
-                      Text(
-                        'Add the first shared '
-                        'expense to start tracking balances.',
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+                  padding: EdgeInsets.all(30),
+                  child: _InlineEmptyState(
+                    icon: Icons.receipt_long_outlined,
+                    title: 'No group expenses yet',
+                    message:
+                        'Add the first shared expense to start tracking balances.',
                   ),
                 ),
               );
             }
 
-            return Column(
-              children: <Widget>[
-                for (final GroupSplit split in expenses)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _GroupExpenseCard(
-                      key: ValueKey<String>('group_expense_${split.id}'),
-                      split: split,
+            return Card(
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: <Widget>[
+                  for (
+                    int index = 0;
+                    index < expenses.length;
+                    index++
+                  ) ...<Widget>[
+                    _GroupExpenseCard(
+                      key: ValueKey<String>(
+                        'group_expense_${expenses[index].id}',
+                      ),
+                      split: expenses[index],
                       group: group,
                       onDelete: () {
-                        onDeleteExpense(split);
+                        onDeleteExpense(expenses[index]);
                       },
                     ),
-                  ),
-              ],
+                    if (index < expenses.length - 1)
+                      const Divider(height: 1, indent: 72),
+                  ],
+                ],
+              ),
             );
           },
         ),
-        const SizedBox(height: 28),
-        Text(
-          'Balances & settlements',
-          key: const Key('group_balances_heading'),
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+        const SizedBox(height: 30),
+        _SectionHeader(
+          title: 'Balances & settlements',
+          subtitle: 'See who owes whom and record settlement payments.',
+          titleKey: const Key('group_balances_heading'),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         splitsAsync.when(
-          loading: () => const Card(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          ),
-          error: (Object error, StackTrace stackTrace) => Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                'Unable to calculate balances: '
-                '$error',
-              ),
-            ),
+          loading: () => const _SectionLoadingCard(),
+          error: (Object error, StackTrace stackTrace) => _SectionErrorCard(
+            message: 'Unable to calculate balances: $error',
           ),
           data: (List<GroupSplit> splits) {
             return _GroupFinanceSummary(
@@ -1174,15 +1091,18 @@ class _GroupDetailsContent extends StatelessWidget {
             );
           },
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 30),
         splitsAsync.when(
           loading: () => const SizedBox.shrink(),
           error: (Object error, StackTrace stackTrace) =>
               const SizedBox.shrink(),
           data: (List<GroupSplit> splits) {
-            final List<GroupSplit> settlementPayments = splits
-                .where(_isSettlementPayment)
-                .toList(growable: false);
+            final List<GroupSplit> settlementPayments =
+                splits.where(_isSettlementPayment).toList(growable: false)
+                  ..sort(
+                    (GroupSplit first, GroupSplit second) =>
+                        second.occurredAt.compareTo(first.occurredAt),
+                  );
 
             if (settlementPayments.isEmpty) {
               return const SizedBox.shrink();
@@ -1191,49 +1111,51 @@ class _GroupDetailsContent extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
-                  'Settlement payments',
-                  key: const Key('settlement_payments_heading'),
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
+                _SectionHeader(
+                  title: 'Settlement payments',
+                  subtitle:
+                      'Recorded payments that reduce outstanding balances.',
+                  titleKey: const Key('settlement_payments_heading'),
+                ),
+                const SizedBox(height: 14),
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    children: <Widget>[
+                      for (
+                        int index = 0;
+                        index < settlementPayments.length;
+                        index++
+                      ) ...<Widget>[
+                        _SettlementPaymentCard(
+                          split: settlementPayments[index],
+                          group: group,
+                          onDelete: () {
+                            onDeleteExpense(settlementPayments[index]);
+                          },
+                        ),
+                        if (index < settlementPayments.length - 1)
+                          const Divider(height: 1, indent: 72),
+                      ],
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                for (final GroupSplit split in settlementPayments)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _SettlementPaymentCard(
-                      split: split,
-                      group: group,
-                      onDelete: () {
-                        onDeleteExpense(split);
-                      },
-                    ),
-                  ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 30),
               ],
             );
           },
         ),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                'Members',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            FilledButton.tonalIcon(
-              key: const Key('add_group_member_button'),
-              onPressed: onAddMember,
-              icon: const Icon(Icons.person_add_alt_1),
-              label: const Text('Add member'),
-            ),
-          ],
+        _SectionHeader(
+          title: 'Members',
+          subtitle: 'People participating in this shared expense group.',
+          action: FilledButton.tonalIcon(
+            key: const Key('add_group_member_button'),
+            onPressed: onAddMember,
+            icon: const Icon(Icons.person_add_alt_1),
+            label: const Text('Add member'),
+          ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         Card(
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -1252,45 +1174,356 @@ class _GroupDetailsContent extends StatelessWidget {
                         },
                 ),
                 if (index < activeMembers.length - 1)
-                  const Divider(height: 1, indent: 72),
+                  const Divider(height: 1, indent: 76),
               ],
             ],
           ),
         ),
-        const SizedBox(height: 32),
-        Text(
-          'Group actions',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+        const SizedBox(height: 30),
+        const _SectionHeader(
+          title: 'Group actions',
+          subtitle: 'Export records or manage this group.',
         ),
-        const SizedBox(height: 12),
-        GroupPdfExportButton(group: group),
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          onPressed: onArchive,
-          icon: const Icon(Icons.archive_outlined),
-          label: const Text('Archive group'),
-        ),
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          onPressed: onDelete,
-          icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
-          label: Text(
-            'Delete group',
-            style: TextStyle(color: theme.colorScheme.error),
-          ),
+        const SizedBox(height: 14),
+        _GroupActionsCard(
+          group: group,
+          onArchive: onArchive,
+          onDelete: onDelete,
         ),
       ],
     );
   }
+}
 
-  static String _formatDate(DateTime date) {
-    final DateTime local = date.toLocal();
+class _GroupOverviewCard extends StatelessWidget {
+  const _GroupOverviewCard({
+    required this.group,
+    required this.activeMemberCount,
+  });
 
-    return '${local.day.toString().padLeft(2, '0')}/'
-        '${local.month.toString().padLeft(2, '0')}/'
-        '${local.year}';
+  final Group group;
+  final int activeMemberCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colors = theme.colorScheme;
+    final String initial = group.name.trim().isEmpty
+        ? '?'
+        : group.name.trim().substring(0, 1).toUpperCase();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final bool wide = constraints.maxWidth >= 760;
+
+            final Widget identity = Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: colors.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    initial,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      color: colors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        group.name,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (group.description != null &&
+                          group.description!.trim().isNotEmpty) ...<Widget>[
+                        const SizedBox(height: 6),
+                        Text(
+                          group.description!,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            );
+
+            final Widget metrics = Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: <Widget>[
+                _OverviewMetric(
+                  icon: Icons.people_outline,
+                  label: 'Members',
+                  value: '$activeMemberCount',
+                ),
+                _OverviewMetric(
+                  icon: Icons.payments_outlined,
+                  label: 'Currency',
+                  value: group.defaultCurrencyCode,
+                ),
+                _OverviewMetric(
+                  icon: Icons.calendar_today_outlined,
+                  label: 'Created',
+                  value: _formatDate(group.createdAt),
+                ),
+              ],
+            );
+
+            if (wide) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
+                  Expanded(child: identity),
+                  const SizedBox(width: 28),
+                  metrics,
+                ],
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[identity, const SizedBox(height: 22), metrics],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _OverviewMetric extends StatelessWidget {
+  const _OverviewMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    return Container(
+      constraints: const BoxConstraints(minWidth: 118),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 19, color: colors.onSurfaceVariant),
+          const SizedBox(width: 9),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                label,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+              ),
+              const SizedBox(height: 2),
+              Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.title,
+    required this.subtitle,
+    this.titleKey,
+    this.action,
+  });
+
+  final String title;
+  final String subtitle;
+  final Key? titleKey;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: <Widget>[
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                title,
+                key: titleKey,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (action != null) ...<Widget>[const SizedBox(width: 16), action!],
+      ],
+    );
+  }
+}
+
+class _SectionLoadingCard extends StatelessWidget {
+  const _SectionLoadingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Card(
+      child: Padding(
+        padding: EdgeInsets.all(30),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+    );
+  }
+}
+
+class _SectionErrorCard extends StatelessWidget {
+  const _SectionErrorCard({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(
+              Icons.error_outline,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InlineEmptyState extends StatelessWidget {
+  const _InlineEmptyState({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    return Column(
+      children: <Widget>[
+        Container(
+          width: 58,
+          height: 58,
+          decoration: BoxDecoration(
+            color: colors.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Icon(icon, color: colors.primary, size: 28),
+        ),
+        const SizedBox(height: 14),
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+}
+
+class _GroupActionsCard extends StatelessWidget {
+  const _GroupActionsCard({
+    required this.group,
+    required this.onArchive,
+    required this.onDelete,
+  });
+
+  final Group group;
+  final VoidCallback onArchive;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: <Widget>[
+            GroupPdfExportButton(group: group),
+            OutlinedButton.icon(
+              onPressed: onArchive,
+              icon: const Icon(Icons.archive_outlined),
+              label: const Text('Archive group'),
+            ),
+            OutlinedButton.icon(
+              onPressed: onDelete,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: colors.error,
+                side: BorderSide(color: colors.error.withValues(alpha: 0.45)),
+              ),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Delete group'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -1327,37 +1560,43 @@ class _GroupFinanceSummary extends StatelessWidget {
         balances,
       );
 
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          _BalancesCard(group: group, balances: balances),
-          const SizedBox(height: 12),
-          _SettlementsCard(
-            group: group,
-            settlements: settlements,
-            onSettle: onSettle,
-          ),
-        ],
-      );
-    } on Object catch (error) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              const Icon(Icons.error_outline),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Unable to calculate '
-                  'balances: $error',
+      return LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          if (constraints.maxWidth >= 900) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(
+                  child: _BalancesCard(group: group, balances: balances),
                 ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _SettlementsCard(
+                    group: group,
+                    settlements: settlements,
+                    onSettle: onSettle,
+                  ),
+                ),
+              ],
+            );
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              _BalancesCard(group: group, balances: balances),
+              const SizedBox(height: 14),
+              _SettlementsCard(
+                group: group,
+                settlements: settlements,
+                onSettle: onSettle,
               ),
             ],
-          ),
-        ),
+          );
+        },
       );
+    } on Object catch (error) {
+      return _SectionErrorCard(message: 'Unable to calculate balances: $error');
     }
   }
 }
@@ -1370,23 +1609,43 @@ class _BalancesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
     return Card(
       key: const Key('group_balances_card'),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: <Widget>[
-          const ListTile(
-            leading: Icon(Icons.account_balance_wallet_outlined),
-            title: Text(
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 6,
+            ),
+            leading: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: colors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(
+                Icons.account_balance_wallet_outlined,
+                color: colors.primary,
+              ),
+            ),
+            title: const Text(
               'Net balances',
-              style: TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            subtitle: const Text(
+              'Positive means the member should receive money.',
             ),
           ),
           const Divider(height: 1),
           for (int index = 0; index < balances.length; index++) ...<Widget>[
             _BalanceTile(group: group, balance: balances[index]),
             if (index < balances.length - 1)
-              const Divider(height: 1, indent: 16, endIndent: 16),
+              const Divider(height: 1, indent: 20, endIndent: 20),
           ],
         ],
       ),
@@ -1403,34 +1662,54 @@ class _BalanceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final GroupMember? member = _findMember(group, balance.memberId);
-
     final String name = member?.displayName ?? 'Unknown member';
-
     final bool isCurrentUser = member?.isCurrentUser ?? false;
-
     final int amount = balance.balanceMinor.abs();
+    final ColorScheme colors = Theme.of(context).colorScheme;
 
     final String status;
+    final Color statusColor;
+    final IconData statusIcon;
 
     if (balance.balanceMinor > 0) {
       status = isCurrentUser ? 'You are owed' : 'Is owed';
+      statusColor = AppColors.positive;
+      statusIcon = Icons.south_west_rounded;
     } else if (balance.balanceMinor < 0) {
       status = isCurrentUser ? 'You owe' : 'Owes';
+      statusColor = AppColors.danger;
+      statusIcon = Icons.north_east_rounded;
     } else {
       status = 'Settled';
+      statusColor = colors.onSurfaceVariant;
+      statusIcon = Icons.check_rounded;
     }
 
     return ListTile(
-      title: Text(isCurrentUser ? '$name (You)' : name),
-      subtitle: Text(status),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      leading: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: statusColor.withValues(alpha: 0.09),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(statusIcon, size: 19, color: statusColor),
+      ),
+      title: Text(
+        isCurrentUser ? '$name (You)' : name,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(status, style: TextStyle(color: statusColor)),
       trailing: balance.balanceMinor == 0
-          ? const Icon(Icons.check_circle_outline)
+          ? Icon(Icons.check_circle_outline, color: AppColors.positive)
           : Text(
               '${group.defaultCurrencyCode} '
               '${_formatMinorAmount(amount, group.defaultCurrencyScale)}',
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: statusColor,
+                fontWeight: FontWeight.w700,
+              ),
             ),
     );
   }
@@ -1449,35 +1728,43 @@ class _SettlementsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
     return Card(
       key: const Key('group_settlement_suggestions_card'),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: <Widget>[
-          const ListTile(
-            leading: Icon(Icons.swap_horiz),
-            title: Text(
-              'Settlement suggestions',
-              style: TextStyle(fontWeight: FontWeight.bold),
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 6,
             ),
-            subtitle: Text(
-              'Record a payment when one '
-              'member settles another member’s balance.',
+            leading: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: colors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(Icons.swap_horiz, color: colors.primary),
+            ),
+            title: const Text(
+              'Settlement suggestions',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            subtitle: const Text(
+              'Record a payment when one member settles another balance.',
             ),
           ),
           const Divider(height: 1),
           if (settlements.isEmpty)
             const Padding(
-              padding: EdgeInsets.all(24),
-              child: Column(
-                children: <Widget>[
-                  Icon(Icons.check_circle_outline, size: 40),
-                  SizedBox(height: 10),
-                  Text(
-                    'Everyone is settled',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ],
+              padding: EdgeInsets.all(28),
+              child: _InlineEmptyState(
+                icon: Icons.check_circle_outline,
+                title: 'Everyone is settled',
+                message: 'There are no outstanding payments in this group.',
               ),
             )
           else
@@ -1494,7 +1781,7 @@ class _SettlementsCard extends StatelessWidget {
                 },
               ),
               if (index < settlements.length - 1)
-                const Divider(height: 1, indent: 16, endIndent: 16),
+                const Divider(height: 1, indent: 20, endIndent: 20),
             ],
         ],
       ),
@@ -1516,28 +1803,42 @@ class _SettlementTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final GroupMember? fromMember = _findMember(group, settlement.fromMemberId);
-
     final GroupMember? toMember = _findMember(group, settlement.toMemberId);
+    final ColorScheme colors = Theme.of(context).colorScheme;
 
     final String fromName = fromMember?.isCurrentUser ?? false
         ? 'You'
         : fromMember?.displayName ?? 'Unknown';
-
     final String toName = toMember?.isCurrentUser ?? false
         ? 'You'
         : toMember?.displayName ?? 'Unknown';
 
     return ListTile(
-      leading: const CircleAvatar(child: Icon(Icons.arrow_forward)),
-      title: Text('$fromName → $toName'),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 7),
+      leading: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: colors.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(
+          Icons.arrow_forward_rounded,
+          size: 19,
+          color: colors.primary,
+        ),
+      ),
+      title: Text(
+        '$fromName → $toName',
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
       subtitle: Text(
         'Pay ${group.defaultCurrencyCode} '
         '${_formatMinorAmount(settlement.amountMinor, group.defaultCurrencyScale)}',
       ),
       trailing: FilledButton.tonal(
         key: ValueKey<String>(
-          'settle_${settlement.fromMemberId}_'
-          '${settlement.toMemberId}',
+          'settle_${settlement.fromMemberId}_${settlement.toMemberId}',
         ),
         onPressed: onSettle,
         child: const Text('Settle'),
@@ -1560,60 +1861,73 @@ class _SettlementPaymentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final GroupMember? payer = _findMember(group, split.paidByMemberId);
-
     final String receiverId = split.shares.isEmpty
         ? ''
         : split.shares.first.memberId;
-
     final GroupMember? receiver = _findMember(group, receiverId);
 
     final String payerName = payer?.isCurrentUser ?? false
         ? 'You'
         : payer?.displayName ?? 'Unknown';
-
     final String receiverName = receiver?.isCurrentUser ?? false
         ? 'You'
         : receiver?.displayName ?? 'Unknown';
 
-    return Card(
+    return ListTile(
       key: ValueKey<String>('settlement_payment_${split.id}'),
-      child: ListTile(
-        leading: const CircleAvatar(child: Icon(Icons.payments_outlined)),
-        title: Text(
-          '$payerName → $receiverName',
-          style: const TextStyle(fontWeight: FontWeight.w600),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: AppColors.positive.withValues(alpha: 0.09),
+          borderRadius: BorderRadius.circular(11),
         ),
-        subtitle: Text(
-          'Settlement payment • '
-          '${_formatDate(split.occurredAt)}',
+        child: const Icon(
+          Icons.payments_outlined,
+          color: AppColors.positive,
+          size: 20,
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              '${split.currencyCode} '
-              '${_formatMinorAmount(split.totalAmountMinor, split.currencyScale)}',
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+      ),
+      title: Text(
+        '$payerName → $receiverName',
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text('Settlement payment • ${_formatDate(split.occurredAt)}'),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            '${split.currencyCode} '
+            '${_formatMinorAmount(split.totalAmountMinor, split.currencyScale)}',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: AppColors.positive,
+              fontWeight: FontWeight.w700,
             ),
-            PopupMenuButton<String>(
-              onSelected: (String value) {
-                if (value == 'delete') {
-                  onDelete();
-                }
-              },
-              itemBuilder: (BuildContext context) {
-                return const <PopupMenuEntry<String>>[
-                  PopupMenuItem<String>(
-                    value: 'delete',
-                    child: Text('Delete payment'),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Payment actions',
+            onSelected: (String value) {
+              if (value == 'delete') {
+                onDelete();
+              }
+            },
+            itemBuilder: (BuildContext context) {
+              return const <PopupMenuEntry<String>>[
+                PopupMenuItem<String>(
+                  value: 'delete',
+                  child: Row(
+                    children: <Widget>[
+                      Icon(Icons.delete_outline),
+                      SizedBox(width: 10),
+                      Text('Delete payment'),
+                    ],
                   ),
-                ];
-              },
-            ),
-          ],
-        ),
+                ),
+              ];
+            },
+          ),
+        ],
       ),
     );
   }
@@ -1634,76 +1948,71 @@ class _GroupExpenseCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final GroupMember? payer = _findMember(group, split.paidByMemberId);
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    final String payerName = payer?.isCurrentUser ?? false
+        ? '${payer?.displayName ?? 'You'} (You)'
+        : payer?.displayName ?? 'Unknown';
 
-    return Card(
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: const CircleAvatar(child: Icon(Icons.receipt_long_outlined)),
-        title: Text(
-          split.title,
-          style: const TextStyle(fontWeight: FontWeight.w600),
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: colors.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(11),
         ),
-        subtitle: Text(
-          'Paid by '
-          '${payer?.displayName ?? 'Unknown'}'
-          ' • ${split.shares.length} '
-          '${split.shares.length == 1 ? 'member' : 'members'}'
-          '\n${_formatDate(split.occurredAt)}',
-        ),
-        isThreeLine: true,
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              '${split.currencyCode} '
-              '${_formatMinorAmount(split.totalAmountMinor, split.currencyScale)}',
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            PopupMenuButton<String>(
-              onSelected: (String value) {
-                if (value == 'delete') {
-                  onDelete();
-                }
-              },
-              itemBuilder: (BuildContext context) {
-                return const <PopupMenuEntry<String>>[
-                  PopupMenuItem<String>(
-                    value: 'delete',
-                    child: Text('Delete expense'),
-                  ),
-                ];
-              },
-            ),
-          ],
+        child: Icon(
+          Icons.receipt_long_outlined,
+          size: 20,
+          color: colors.primary,
         ),
       ),
-    );
-  }
-}
-
-class _InfoTile extends StatelessWidget {
-  const _InfoTile({
-    required this.icon,
-    required this.title,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String title;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      trailing: Text(
-        value,
-        style: Theme.of(
-          context,
-        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+      title: Text(
+        split.title,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 3),
+        child: Text(
+          'Paid by $payerName • ${split.shares.length} '
+          '${split.shares.length == 1 ? 'member' : 'members'} • '
+          '${_formatDate(split.occurredAt)}',
+        ),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            '${split.currencyCode} '
+            '${_formatMinorAmount(split.totalAmountMinor, split.currencyScale)}',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Expense actions',
+            onSelected: (String value) {
+              if (value == 'delete') {
+                onDelete();
+              }
+            },
+            itemBuilder: (BuildContext context) {
+              return const <PopupMenuEntry<String>>[
+                PopupMenuItem<String>(
+                  value: 'delete',
+                  child: Row(
+                    children: <Widget>[
+                      Icon(Icons.delete_outline),
+                      SizedBox(width: 10),
+                      Text('Delete expense'),
+                    ],
+                  ),
+                ),
+              ];
+            },
+          ),
+        ],
       ),
     );
   }
@@ -1720,35 +2029,37 @@ class _MemberTile extends StatelessWidget {
     final String initial = member.displayName.trim().isEmpty
         ? '?'
         : member.displayName.trim().substring(0, 1).toUpperCase();
+    final ColorScheme colors = Theme.of(context).colorScheme;
 
     return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
       leading: CircleAvatar(
         backgroundColor: Color(member.avatarColorValue),
         child: Text(
           initial,
           style: TextStyle(
             color: _foregroundColor(member.avatarColorValue),
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
-      title: Text(member.displayName),
+      title: Text(
+        member.displayName,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
       subtitle: member.email == null || member.email!.trim().isEmpty
-          ? null
+          ? Text(
+              member.isCurrentUser ? 'Current user' : 'Group member',
+              style: TextStyle(color: colors.onSurfaceVariant),
+            )
           : Text(member.email!),
       trailing: member.isCurrentUser
           ? const Chip(label: Text('You'))
           : IconButton(
-              key: ValueKey<String>(
-                'remove_group_member_'
-                '${member.id}',
-              ),
+              key: ValueKey<String>('remove_group_member_${member.id}'),
               tooltip: 'Remove member',
               onPressed: onRemove,
-              icon: Icon(
-                Icons.person_remove_outlined,
-                color: Theme.of(context).colorScheme.error,
-              ),
+              icon: Icon(Icons.person_remove_outlined, color: colors.error),
             ),
     );
   }

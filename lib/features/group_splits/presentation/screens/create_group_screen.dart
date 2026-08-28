@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/currency/app_currency.dart';
+import '../../../../core/currency/default_currency_controller.dart';
 import '../../domain/entities/group.dart';
 import '../../domain/entities/group_member.dart';
 import '../providers/group_controller.dart';
@@ -18,7 +20,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
 
-  String _currencyCode = 'PKR';
+  String? _currencyCode;
 
   bool _isSaving = false;
 
@@ -32,6 +34,14 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   @override
   Widget build(BuildContext context) {
     final AsyncValue<void> controllerState = ref.watch(groupControllerProvider);
+
+    final AppCurrency defaultCurrency = ref.watch(
+      defaultCurrencyControllerProvider,
+    );
+
+    final AppCurrency selectedCurrency = AppCurrency.fromCode(
+      _currencyCode ?? defaultCurrency.code,
+    );
 
     final bool controllerLoading = controllerState.isLoading;
 
@@ -92,31 +102,23 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                initialValue: _currencyCode,
+                key: ValueKey<String>(
+                  'group-currency-${selectedCurrency.code}',
+                ),
+                initialValue: selectedCurrency.code,
                 decoration: const InputDecoration(
                   labelText: 'Default currency',
                   prefixIcon: Icon(Icons.currency_exchange),
                   border: OutlineInputBorder(),
                 ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'PKR',
-                    child: Text('PKR — Pakistani Rupee'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'USD',
-                    child: Text('USD — US Dollar'),
-                  ),
-                  DropdownMenuItem(value: 'EUR', child: Text('EUR — Euro')),
-                  DropdownMenuItem(
-                    value: 'GBP',
-                    child: Text('GBP — British Pound'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'AED',
-                    child: Text('AED — UAE Dirham'),
-                  ),
-                ],
+                items: AppCurrency.supported
+                    .map(
+                      (AppCurrency currency) => DropdownMenuItem<String>(
+                        value: currency.code,
+                        child: Text(currency.label),
+                      ),
+                    )
+                    .toList(growable: false),
                 onChanged: (String? value) {
                   if (value == null) {
                     return;
@@ -165,6 +167,14 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
 
     final DateTime now = DateTime.now().toUtc();
 
+    final AppCurrency defaultCurrency = ref.read(
+      defaultCurrencyControllerProvider,
+    );
+
+    final AppCurrency selectedCurrency = AppCurrency.fromCode(
+      _currencyCode ?? defaultCurrency.code,
+    );
+
     const String currentUserId = 'current-user';
 
     final GroupMember currentUser = GroupMember(
@@ -182,8 +192,8 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           ? null
           : _descriptionController.text.trim(),
       ownerMemberId: currentUserId,
-      defaultCurrencyCode: _currencyCode,
-      defaultCurrencyScale: 2,
+      defaultCurrencyCode: selectedCurrency.code,
+      defaultCurrencyScale: selectedCurrency.scale,
       members: <GroupMember>[currentUser],
       createdAt: now,
       updatedAt: now,

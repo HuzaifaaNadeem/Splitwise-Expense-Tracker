@@ -1,73 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-
 import 'package:splitwise_expense_tracker/main.dart' as app;
 
 Future<void> waitFor(
   WidgetTester tester,
   Finder finder, {
-  int attempts = 40,
+  Duration timeout = const Duration(seconds: 12),
+  Duration step = const Duration(milliseconds: 100),
 }) async {
-  for (int index = 0; index < attempts; index++) {
+  final DateTime deadline = DateTime.now().add(timeout);
+
+  while (DateTime.now().isBefore(deadline)) {
+    await tester.pump(step);
+
     if (finder.evaluate().isNotEmpty) {
       return;
     }
-
-    await tester.pump(const Duration(milliseconds: 250));
   }
 
   expect(finder, findsWidgets, reason: 'Expected widget did not appear.');
 }
 
-Future<void> waitForAny(
-  WidgetTester tester,
-  List<Finder> finders, {
-  int attempts = 40,
-}) async {
-  for (int index = 0; index < attempts; index++) {
-    final bool found = finders.any(
-      (Finder finder) => finder.evaluate().isNotEmpty,
-    );
+Future<void> tapAndSettle(WidgetTester tester, Finder finder) async {
+  await waitFor(tester, finder);
 
-    if (found) {
-      return;
-    }
+  await tester.ensureVisible(finder.first);
+  await tester.pumpAndSettle();
 
-    await tester.pump(const Duration(milliseconds: 250));
-  }
-
-  fail('None of the expected widgets appeared.');
-}
-
-Future<void> dragUntilFound(
-  WidgetTester tester, {
-  required Finder scrollable,
-  required Finder target,
-}) async {
-  await waitFor(tester, scrollable);
-
-  for (int index = 0; index < 15; index++) {
-    if (target.evaluate().isNotEmpty) {
-      await tester.ensureVisible(target.first);
-      await tester.pumpAndSettle();
-      return;
-    }
-
-    await tester.drag(scrollable, const Offset(0, -350));
-
-    await tester.pumpAndSettle();
-  }
-
-  expect(
-    target,
-    findsWidgets,
-    reason: 'Target widget was not found after scrolling.',
-  );
-}
-
-Finder appBarTitle(String text) {
-  return find.descendant(of: find.byType(AppBar), matching: find.text(text));
+  await tester.tap(finder.first);
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -79,262 +41,101 @@ void main() {
     await app.main();
     await tester.pumpAndSettle();
 
-    try {
-      final String stamp = DateTime.now().millisecondsSinceEpoch.toString();
+    final String uniqueSuffix = DateTime.now().microsecondsSinceEpoch
+        .toString();
 
-      final String groupName = 'Integration Group $stamp';
+    final String groupName = 'Integration Group $uniqueSuffix';
+    final String expenseTitle = 'Integration Dinner $uniqueSuffix';
 
-      final String expenseTitle = 'Dinner $stamp';
+    // Open Groups from the main application navigation.
+    final Finder groupsNavigation = find.text('Groups');
 
-      // --------------------------------------------------
-      // 1. Navigate to Groups tab
-      // --------------------------------------------------
+    await waitFor(tester, groupsNavigation);
 
-      final Finder groupsNavigation = find.text('Groups').last;
+    await tester.tap(groupsNavigation.first);
 
-      expect(groupsNavigation, findsOneWidget);
+    await tester.pumpAndSettle();
 
-      await tester.tap(groupsNavigation);
-      await tester.pumpAndSettle();
+    // Open the Create Group screen.
+    final Finder createGroupButton = find.widgetWithText(
+      FloatingActionButton,
+      'Create group',
+    );
 
-      await waitForAny(tester, <Finder>[
-        find.text('Create group'),
-        find.byIcon(Icons.add),
-      ]);
+    await tapAndSettle(tester, createGroupButton);
 
-      // --------------------------------------------------
-      // 2. Open Create Group
-      // --------------------------------------------------
+    await waitFor(tester, find.text('Group details'));
 
-      final Finder createGroupText = find.text('Create group');
+    // The first TextFormField on CreateGroupScreen is the group-name field.
+    final Finder groupNameField = find.byType(TextFormField).first;
 
-      if (createGroupText.evaluate().isNotEmpty) {
-        final Finder createGroupButton = find.ancestor(
-          of: createGroupText,
-          matching: find.byWidgetPredicate(
-            (Widget widget) => widget is ButtonStyleButton,
-          ),
-        );
+    await tester.enterText(groupNameField, groupName);
 
-        if (createGroupButton.evaluate().isNotEmpty) {
-          await tester.tap(createGroupButton.first);
-        } else {
-          await tester.tap(createGroupText.last);
-        }
-      } else {
-        final Finder addIcon = find.byIcon(Icons.add);
+    await tester.pump();
 
-        expect(addIcon, findsAtLeastNWidgets(1));
+    final Finder confirmCreateGroupButton = find.widgetWithText(
+      FilledButton,
+      'Create group',
+    );
 
-        await tester.tap(addIcon.last);
-      }
+    await tapAndSettle(tester, confirmCreateGroupButton);
 
-      await tester.pumpAndSettle();
+    // The screen returns to the groups workspace after creation.
+    final Finder createdGroup = find.text(groupName);
 
-      // --------------------------------------------------
-      // 3. Verify Create Group screen
-      // --------------------------------------------------
+    await waitFor(tester, createdGroup);
 
-      await waitFor(tester, appBarTitle('Create group'));
+    await tester.ensureVisible(createdGroup.first);
 
-      expect(appBarTitle('Create group'), findsOneWidget);
+    await tester.pumpAndSettle();
 
-      // --------------------------------------------------
-      // 4. Enter group name
-      // --------------------------------------------------
+    await tester.tap(createdGroup.first);
 
-      final Finder groupFields = find.byType(TextFormField);
+    await tester.pumpAndSettle();
 
-      expect(groupFields, findsAtLeastNWidgets(1));
+    await waitFor(tester, find.byKey(const Key('group_details_screen')));
 
-      await tester.enterText(groupFields.first, groupName);
+    // Open Add Group Expense.
+    final Finder addExpenseButton = find.byKey(
+      const Key('add_group_expense_button'),
+    );
 
-      FocusManager.instance.primaryFocus?.unfocus();
-      await tester.pumpAndSettle();
+    await tapAndSettle(tester, addExpenseButton);
 
-      // --------------------------------------------------
-      // 5. Tap actual Create Group button
-      // --------------------------------------------------
+    await waitFor(tester, find.byKey(const Key('add_group_expense_screen')));
 
-      final Finder createButton = find.ancestor(
-        of: find.text('Create group'),
-        matching: find.byWidgetPredicate(
-          (Widget widget) => widget is ButtonStyleButton,
-        ),
-      );
+    // Fill the shared-expense form.
+    final Finder expenseTitleField = find.byKey(
+      const Key('group_expense_title_field'),
+    );
 
-      expect(createButton, findsOneWidget);
+    final Finder expenseAmountField = find.byKey(
+      const Key('group_expense_amount_field'),
+    );
 
-      await tester.ensureVisible(createButton);
+    await tester.enterText(expenseTitleField, expenseTitle);
 
-      await tester.tap(createButton);
+    await tester.enterText(expenseAmountField, '3000.00');
 
-      await tester.pumpAndSettle();
+    await tester.pump();
 
-      // --------------------------------------------------
-      // 6. Confirm group was created
-      // --------------------------------------------------
+    // Save button is fixed in the bottom action area and remains hittable.
+    final Finder saveExpenseButton = find.byKey(
+      const Key('save_group_expense_button'),
+    );
 
-      final Finder groupText = find.text(groupName);
+    await tapAndSettle(tester, saveExpenseButton);
 
-      await waitFor(tester, groupText);
+    // Successful save returns to Group Details.
+    await waitFor(tester, find.byKey(const Key('group_details_screen')));
 
-      expect(groupText, findsOneWidget);
+    // Wait for the newly-created shared expense to be rendered.
+    await waitFor(tester, find.text(expenseTitle));
 
-      // --------------------------------------------------
-      // 7. Open newly-created group
-      // --------------------------------------------------
+    expect(find.text(expenseTitle), findsOneWidget);
 
-      await tester.ensureVisible(groupText);
-
-      final Finder groupListTile = find.ancestor(
-        of: groupText,
-        matching: find.byType(ListTile),
-      );
-
-      final Finder groupInkWell = find.ancestor(
-        of: groupText,
-        matching: find.byType(InkWell),
-      );
-
-      if (groupListTile.evaluate().isNotEmpty) {
-        await tester.tap(groupListTile.first);
-      } else if (groupInkWell.evaluate().isNotEmpty) {
-        await tester.tap(groupInkWell.first);
-      } else {
-        await tester.tap(groupText);
-      }
-
-      await tester.pumpAndSettle();
-
-      // --------------------------------------------------
-      // 8. Verify real Group Details screen
-      // --------------------------------------------------
-
-      final Finder detailsScreen = find.byKey(
-        const Key('group_details_screen'),
-      );
-
-      await waitFor(tester, detailsScreen);
-
-      expect(detailsScreen, findsOneWidget);
-
-      final Finder detailsList = find.byKey(const Key('group_details_list'));
-
-      await waitFor(tester, detailsList);
-
-      // --------------------------------------------------
-      // 9. Find Add Expense button
-      // --------------------------------------------------
-
-      final Finder addExpenseButton = find.byKey(
-        const Key('add_group_expense_button'),
-      );
-
-      await dragUntilFound(
-        tester,
-        scrollable: detailsList,
-        target: addExpenseButton,
-      );
-
-      expect(addExpenseButton, findsOneWidget);
-
-      await tester.tap(addExpenseButton);
-
-      await tester.pumpAndSettle();
-
-      // --------------------------------------------------
-      // 10. Verify Add Group Expense screen
-      // --------------------------------------------------
-
-      final Finder addExpenseScreen = find.byKey(
-        const Key('add_group_expense_screen'),
-      );
-
-      await waitFor(tester, addExpenseScreen);
-
-      expect(addExpenseScreen, findsOneWidget);
-
-      // --------------------------------------------------
-      // 11. Enter expense title and amount
-      // --------------------------------------------------
-
-      final Finder titleField = find.byKey(
-        const Key('group_expense_title_field'),
-      );
-
-      final Finder amountField = find.byKey(
-        const Key('group_expense_amount_field'),
-      );
-
-      expect(titleField, findsOneWidget);
-
-      expect(amountField, findsOneWidget);
-
-      await tester.enterText(titleField, expenseTitle);
-
-      await tester.enterText(amountField, '3000');
-
-      FocusManager.instance.primaryFocus?.unfocus();
-      await tester.pumpAndSettle();
-
-      // --------------------------------------------------
-      // 12. Find Save Expense button
-      // --------------------------------------------------
-
-      final Finder expenseList = find.byKey(
-        const Key('add_group_expense_list'),
-      );
-
-      final Finder saveButton = find.byKey(
-        const Key('save_group_expense_button'),
-      );
-
-      await dragUntilFound(tester, scrollable: expenseList, target: saveButton);
-
-      expect(saveButton, findsOneWidget);
-
-      // --------------------------------------------------
-      // 13. Save expense
-      // --------------------------------------------------
-
-      await tester.tap(saveButton);
-
-      await tester.pumpAndSettle();
-
-      // --------------------------------------------------
-      // 14. Confirm return to Group Details
-      // --------------------------------------------------
-
-      await waitFor(tester, find.byKey(const Key('group_details_screen')));
-
-      final Finder returnedList = find.byKey(const Key('group_details_list'));
-
-      await waitFor(tester, returnedList);
-
-      // --------------------------------------------------
-      // 15. Verify saved expense
-      // --------------------------------------------------
-
-      final Finder savedExpense = find.text(expenseTitle);
-
-      await dragUntilFound(
-        tester,
-        scrollable: returnedList,
-        target: savedExpense,
-      );
-
-      expect(savedExpense, findsOneWidget);
-
-      expect(find.textContaining('3000.00'), findsOneWidget);
-    } finally {
-      FocusManager.instance.primaryFocus?.unfocus();
-
-      await tester.pump();
-
-      await tester.pumpWidget(const SizedBox.shrink());
-
-      await tester.pump();
-    }
+    // Group Details uses production money formatting with thousands
+    // separators, therefore 3000.00 is displayed as 3,000.00.
+    expect(find.textContaining('3,000.00'), findsOneWidget);
   });
 }
