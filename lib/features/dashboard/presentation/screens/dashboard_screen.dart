@@ -590,7 +590,7 @@ class _BudgetProgressCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '$periodLabel â€¢ No budget configured',
+                      '$periodLabel  |  No budget configured',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: colors.onSurfaceVariant,
                       ),
@@ -968,7 +968,7 @@ Color _budgetStatusColor(_BudgetSnapshot snapshot) {
 }
 
 String _weekRangeLabel(DateTime start, DateTime end) {
-  return '${start.day} ${_shortMonthName(start.month)} â€“ '
+  return '${start.day} ${_shortMonthName(start.month)}  -  '
       '${end.day} ${_shortMonthName(end.month)} ${end.year}';
 }
 

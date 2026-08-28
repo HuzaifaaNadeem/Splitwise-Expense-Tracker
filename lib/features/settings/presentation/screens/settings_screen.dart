@@ -15,6 +15,7 @@ import '../../../group_splits/domain/entities/group.dart';
 import '../../../group_splits/presentation/providers/group_providers.dart';
 import '../../../group_splits/presentation/screens/group_details_screen.dart';
 import '../../../group_splits/presentation/widgets/group_pdf_export_button.dart';
+import '../../../reports/presentation/screens/financial_statement_screen.dart';
 
 enum _SettingsSection { general, appearance, budgeting, data, reports, about }
 
@@ -409,7 +410,8 @@ class _GeneralSettings extends ConsumerWidget {
         _InteractiveSettingCard(
           icon: Icons.picture_as_pdf_outlined,
           title: 'Reports',
-          description: 'Generate PDF reports from your active expense groups.',
+          description:
+              'Generate personal monthly/yearly statements and group PDF reports.',
           buttonLabel: 'Open reports',
           onPressed: onReports,
         ),
@@ -836,8 +838,15 @@ class _ReportsSettings extends ConsumerWidget {
 
     return _SettingsPage(
       title: 'Export & reports',
-      subtitle: 'Generate PDF reports directly from your existing groups.',
+      subtitle:
+          'Generate personal financial statements and reports from your saved data.',
       children: <Widget>[
+        const _PersonalStatementCard(),
+        _ReportSectionHeader(
+          title: 'Group reports',
+          description:
+              'Open a shared-expense group or generate its PDF report.',
+        ),
         groupsAsync.when(
           loading: () {
             return const Card(
@@ -913,6 +922,97 @@ class _ReportsSettings extends ConsumerWidget {
   }
 }
 
+class _PersonalStatementCard extends StatelessWidget {
+  const _PersonalStatementCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const _SettingIcon(icon: Icons.receipt_long_outlined),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Personal financial statement',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Generate a professional PDF e-statement for any completed '
+                    'month or year, with income, expenses, net position, '
+                    'category totals, and transaction history.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  FilledButton.icon(
+                    key: const Key('open_financial_statement_button'),
+                    onPressed: () {
+                      unawaited(
+                        Navigator.of(context).push<void>(
+                          MaterialPageRoute<void>(
+                            builder: (BuildContext context) {
+                              return const FinancialStatementScreen();
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.picture_as_pdf_outlined),
+                    label: const Text('Generate statement'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReportSectionHeader extends StatelessWidget {
+  const _ReportSectionHeader({required this.title, required this.description});
+
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 10, 2, 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            description,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _GroupReportCard extends StatelessWidget {
   const _GroupReportCard({required this.group});
 
@@ -944,7 +1044,7 @@ class _GroupReportCard extends StatelessWidget {
                   Text(
                     '$memberCount '
                     '${memberCount == 1 ? 'member' : 'members'} '
-                    'â€¢ ${group.defaultCurrencyCode}',
+                    ' |  ${group.defaultCurrencyCode}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),

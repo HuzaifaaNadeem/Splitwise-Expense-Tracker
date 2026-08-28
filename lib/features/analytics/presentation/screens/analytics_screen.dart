@@ -177,7 +177,7 @@ class _AnalyticsHeader extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                '$month â€¢ ${currency.code}',
+                '$month  |  ${currency.code}',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ],

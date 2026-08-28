@@ -1096,7 +1096,7 @@ _PeriodInfo _weeklyPeriodInfo(DateTime date) {
 
   return _PeriodInfo(
     currentLabel:
-        '${_shortDate(start)} â€“ '
+        '${_shortDate(start)}  -  '
         '${_shortDateWithYear(end)}',
     resetLabel: 'Resets ${_shortDateWithYear(nextStart)}',
   );
