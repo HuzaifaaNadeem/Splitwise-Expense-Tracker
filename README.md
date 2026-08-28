@@ -140,36 +140,6 @@ C -> A  PKR 1,000
 
 This approach avoids common floating-point precision problems in financial calculations.
 
----
-
-## Screenshots
-
-Add screenshots to:
-
-```text
-docs/screenshots/
-```
-
-Recommended screenshots:
-
-- Overview
-- Expenses
-- Analytics
-- Groups
-- Group Details
-- Settings
-- Dark Mode
-
-Example paths:
-
-```text
-docs/screenshots/overview.png
-docs/screenshots/expenses.png
-docs/screenshots/analytics.png
-docs/screenshots/groups.png
-docs/screenshots/group-details.png
-docs/screenshots/settings.png
-```
 
 ---
 
