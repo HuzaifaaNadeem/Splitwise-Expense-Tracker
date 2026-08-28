@@ -45,9 +45,13 @@ class ExpenseSettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Set spending caps for the current week and month.',
+            'Set weekly and monthly spending limits. '
+            'Your spending progress automatically resets when a new '
+            'week or month begins.',
             style: Theme.of(context).textTheme.bodyLarge,
           ),
+          const SizedBox(height: 12),
+          const _BudgetResetInfoCard(),
           const SizedBox(height: 20),
           budgets.when(
             loading: () => const LinearProgressIndicator(),
@@ -70,6 +74,7 @@ class ExpenseSettingsScreen extends ConsumerWidget {
                 children: <Widget>[
                   _BudgetCard(
                     title: 'Weekly budget',
+                    period: BudgetPeriod.weekly,
                     budget: weekly,
                     expenses: expenses,
                     onEdit: () {
@@ -83,9 +88,10 @@ class ExpenseSettingsScreen extends ConsumerWidget {
                       );
                     },
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   _BudgetCard(
                     title: 'Monthly budget',
+                    period: BudgetPeriod.monthly,
                     budget: monthly,
                     expenses: expenses,
                     onEdit: () {
@@ -231,35 +237,103 @@ class ExpenseSettingsScreen extends ConsumerWidget {
     await showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) {
+        final _PeriodInfo periodInfo = _periodInfo(period, DateTime.now());
+
         return AlertDialog(
           title: Text(
-            period == BudgetPeriod.weekly ? 'Weekly Budget' : 'Monthly Budget',
+            period == BudgetPeriod.weekly
+                ? existing == null
+                      ? 'Set Weekly Budget'
+                      : 'Edit Weekly Budget'
+                : existing == null
+                ? 'Set Monthly Budget'
+                : 'Edit Monthly Budget',
           ),
-          content: Form(
-            key: formKey,
-            child: TextFormField(
-              controller: controller,
-              autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Budget amount',
-                prefixText: 'PKR ',
-                prefixIcon: Icon(Icons.account_balance_wallet_outlined),
-              ),
-              validator: (String? value) {
-                final int? amount = MoneyUtils.parseToMinorUnits(
-                  value ?? '',
-                  scale: 2,
-                );
+          content: SizedBox(
+            width: 400,
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        dialogContext,
+                      ).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Icon(
+                          period == BudgetPeriod.weekly
+                              ? Icons.date_range_outlined
+                              : Icons.calendar_month_outlined,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                periodInfo.currentLabel,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                period == BudgetPeriod.weekly
+                                    ? 'Spending resets next Monday.'
+                                    : 'Spending resets on the 1st of '
+                                          'next month.',
+                                style: Theme.of(
+                                  dialogContext,
+                                ).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: controller,
+                    autofocus: true,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Budget amount',
+                      prefixText: 'PKR ',
+                      prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (String? value) {
+                      final int? amount = MoneyUtils.parseToMinorUnits(
+                        value ?? '',
+                        scale: 2,
+                      );
 
-                if (amount == null || amount <= 0) {
-                  return 'Enter a valid budget.';
-                }
+                      if (amount == null || amount <= 0) {
+                        return 'Enter a valid budget.';
+                      }
 
-                return null;
-              },
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'The budget amount will carry forward automatically '
+                    'into each new ${period == BudgetPeriod.weekly ? 'week' : 'month'}.',
+                    style: Theme.of(dialogContext).textTheme.bodySmall,
+                  ),
+                ],
+              ),
             ),
           ),
           actions: <Widget>[
@@ -562,30 +636,117 @@ class ExpenseSettingsScreen extends ConsumerWidget {
   }
 }
 
+class _BudgetResetInfoCard extends StatelessWidget {
+  const _BudgetResetInfoCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      color: colorScheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(Icons.autorenew_outlined, color: colorScheme.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Weekly spending starts fresh every Monday and '
+                'monthly spending starts fresh on the 1st. '
+                'Your configured budget amounts remain saved.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _BudgetCard extends StatelessWidget {
   const _BudgetCard({
     required this.title,
+    required this.period,
     required this.budget,
     required this.expenses,
     required this.onEdit,
   });
 
   final String title;
+  final BudgetPeriod period;
   final Budget? budget;
   final List<Expense> expenses;
   final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    final ColorScheme colorScheme = theme.colorScheme;
+
+    final _PeriodInfo periodInfo = _periodInfo(period, DateTime.now());
+
     final Budget? currentBudget = budget;
 
     if (currentBudget == null) {
       return Card(
-        child: ListTile(
-          leading: const Icon(Icons.account_balance_wallet_outlined),
-          title: Text(title),
-          subtitle: const Text('No budget set'),
-          trailing: FilledButton(onPressed: onEdit, child: const Text('Set')),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Icon(
+                    period == BudgetPeriod.weekly
+                        ? Icons.date_range_outlined
+                        : Icons.calendar_month_outlined,
+                    color: colorScheme.primary,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          title,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          periodInfo.currentLabel,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'No budget set for this period.',
+                style: theme.textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: onEdit,
+                icon: const Icon(Icons.add),
+                label: Text(
+                  period == BudgetPeriod.weekly
+                      ? 'Set weekly budget'
+                      : 'Set monthly budget',
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -595,7 +756,7 @@ class _BudgetCard extends StatelessWidget {
       expenses: expenses,
     );
 
-    final Color color = switch (progress.warningLevel) {
+    final Color progressColor = switch (progress.warningLevel) {
       BudgetWarningLevel.safe => AppColors.positive,
       BudgetWarningLevel.warning => AppColors.warning,
       BudgetWarningLevel.danger => AppColors.danger,
@@ -611,12 +772,39 @@ class _BudgetCard extends StatelessWidget {
           children: <Widget>[
             Row(
               children: <Widget>[
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    period == BudgetPeriod.weekly
+                        ? Icons.date_range_outlined
+                        : Icons.calendar_month_outlined,
+                    color: colorScheme.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(width: 14),
                 Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        title,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        periodInfo.currentLabel,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 IconButton(
@@ -626,28 +814,124 @@ class _BudgetCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
+            _BudgetAmountSummary(budget: currentBudget, progress: progress),
+            const SizedBox(height: 18),
             LinearProgressIndicator(
               value: progress.clampedRatio,
               minHeight: 10,
-              color: color,
+              color: progressColor,
               borderRadius: BorderRadius.circular(10),
             ),
             const SizedBox(height: 10),
-            Text(
-              '$percentage% used',
-              style: TextStyle(color: color, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${MoneyUtils.formatMinorUnits(progress.spentMinor, currencyCode: currentBudget.currencyCode, scale: currentBudget.currencyScale)} of ${MoneyUtils.formatMinorUnits(progress.budgetMinor, currencyCode: currentBudget.currencyCode, scale: currentBudget.currencyScale)}',
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Remaining: ${MoneyUtils.formatMinorUnits(progress.remainingMinor, currencyCode: currentBudget.currencyCode, scale: currentBudget.currencyScale)}',
+            Row(
+              children: <Widget>[
+                Text(
+                  '$percentage% used',
+                  style: TextStyle(
+                    color: progressColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  periodInfo.resetLabel,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _BudgetAmountSummary extends StatelessWidget {
+  const _BudgetAmountSummary({required this.budget, required this.progress});
+
+  final Budget budget;
+  final BudgetProgress progress;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: _BudgetMetric(
+            label: 'Budget',
+            value: MoneyUtils.formatMinorUnits(
+              progress.budgetMinor,
+              currencyCode: budget.currencyCode,
+              scale: budget.currencyScale,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _BudgetMetric(
+            label: 'Spent',
+            value: MoneyUtils.formatMinorUnits(
+              progress.spentMinor,
+              currencyCode: budget.currencyCode,
+              scale: budget.currencyScale,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _BudgetMetric(
+            label: 'Remaining',
+            value: MoneyUtils.formatMinorUnits(
+              progress.remainingMinor,
+              currencyCode: budget.currencyCode,
+              scale: budget.currencyScale,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BudgetMetric extends StatelessWidget {
+  const _BudgetMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    final ColorScheme colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            value,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -672,4 +956,99 @@ class _LoadError extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PeriodInfo {
+  const _PeriodInfo({required this.currentLabel, required this.resetLabel});
+
+  final String currentLabel;
+  final String resetLabel;
+}
+
+_PeriodInfo _periodInfo(BudgetPeriod period, DateTime date) {
+  final DateTime localDate = date.toLocal();
+
+  return switch (period) {
+    BudgetPeriod.weekly => _weeklyPeriodInfo(localDate),
+    BudgetPeriod.monthly => _monthlyPeriodInfo(localDate),
+  };
+}
+
+_PeriodInfo _weeklyPeriodInfo(DateTime date) {
+  final DateTime day = DateTime(date.year, date.month, date.day);
+
+  final DateTime start = day.subtract(
+    Duration(days: day.weekday - DateTime.monday),
+  );
+
+  final DateTime end = start.add(const Duration(days: 6));
+
+  final DateTime nextStart = start.add(const Duration(days: 7));
+
+  return _PeriodInfo(
+    currentLabel:
+        '${_shortDate(start)} – '
+        '${_shortDateWithYear(end)}',
+    resetLabel: 'Resets ${_shortDateWithYear(nextStart)}',
+  );
+}
+
+_PeriodInfo _monthlyPeriodInfo(DateTime date) {
+  final DateTime nextMonth = DateTime(date.year, date.month + 1);
+
+  return _PeriodInfo(
+    currentLabel:
+        '${_monthName(date.month)} '
+        '${date.year}',
+    resetLabel: 'Resets ${_shortDateWithYear(nextMonth)}',
+  );
+}
+
+String _shortDate(DateTime date) {
+  return '${date.day} '
+      '${_shortMonthName(date.month)}';
+}
+
+String _shortDateWithYear(DateTime date) {
+  return '${date.day} '
+      '${_shortMonthName(date.month)} '
+      '${date.year}';
+}
+
+String _shortMonthName(int month) {
+  const List<String> months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  return months[month - 1];
+}
+
+String _monthName(int month) {
+  const List<String> months = <String>[
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  return months[month - 1];
 }

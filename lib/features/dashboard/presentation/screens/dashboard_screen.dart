@@ -5,6 +5,14 @@ import 'package:local_database/local_database.dart';
 
 import '../../../../core/db/database_provider.dart';
 import '../../../../core/db/database_service.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../group_splits/domain/entities/group.dart';
+import '../../../group_splits/domain/entities/group_member.dart';
+import '../../../group_splits/domain/entities/group_split.dart';
+import '../../../group_splits/domain/entities/member_balance.dart';
+import '../../../group_splits/domain/services/group_balance_calculator.dart';
+import '../../../group_splits/presentation/providers/group_providers.dart';
+import '../../../group_splits/presentation/providers/group_split_providers.dart';
 
 final dashboardExpensesProvider = StreamProvider<List<ExpenseModel>>((
   ref,
@@ -28,6 +36,78 @@ final dashboardExpensesProvider = StreamProvider<List<ExpenseModel>>((
   }
 });
 
+final dashboardBudgetsProvider = StreamProvider<List<BudgetModel>>((
+  ref,
+) async* {
+  final DatabaseService databaseService = ref.watch(databaseServiceProvider);
+
+  Future<List<BudgetModel>> loadBudgets() async {
+    final List<BudgetModel> budgets = await databaseService.isar.budgetModels
+        .where()
+        .findAll();
+
+    return budgets
+        .where(
+          (BudgetModel budget) => budget.deletedAt == null && budget.isActive,
+        )
+        .toList(growable: false);
+  }
+
+  yield await loadBudgets();
+
+  await for (final void _ in databaseService.isar.budgetModels.watchLazy()) {
+    yield await loadBudgets();
+  }
+});
+
+final dashboardYouAreOwedProvider = FutureProvider<int>((ref) async {
+  final List<Group> groups = await ref.watch(groupsProvider.future);
+
+  const GroupBalanceCalculator calculator = GroupBalanceCalculator();
+
+  int totalOwedMinor = 0;
+
+  for (final Group group in groups) {
+    if (group.defaultCurrencyCode.toUpperCase() != 'PKR' ||
+        group.defaultCurrencyScale != 2) {
+      continue;
+    }
+
+    final GroupMember? currentUser = group.currentUser;
+
+    if (currentUser == null) {
+      continue;
+    }
+
+    final List<GroupSplit> splits = await ref.watch(
+      groupSplitsProvider(group.id).future,
+    );
+
+    final List<String> memberIds = group.members
+        .map((GroupMember member) => member.id)
+        .toList(growable: false);
+
+    final List<MemberBalance> balances = calculator.calculate(
+      memberIds: memberIds,
+      splits: splits,
+    );
+
+    for (final MemberBalance balance in balances) {
+      if (balance.memberId != currentUser.id) {
+        continue;
+      }
+
+      if (balance.balanceMinor > 0) {
+        totalOwedMinor += balance.balanceMinor;
+      }
+
+      break;
+    }
+  }
+
+  return totalOwedMinor;
+});
+
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -37,122 +117,255 @@ class DashboardScreen extends ConsumerWidget {
       dashboardExpensesProvider,
     );
 
+    final AsyncValue<List<BudgetModel>> budgetsAsync = ref.watch(
+      dashboardBudgetsProvider,
+    );
+
+    final AsyncValue<int> owedAsync = ref.watch(dashboardYouAreOwedProvider);
+
     return expensesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () {
+        return const Center(child: CircularProgressIndicator());
+      },
       error: (Object error, StackTrace stackTrace) {
         return _DashboardErrorState(
           message: error.toString(),
           onRetry: () {
             ref.invalidate(dashboardExpensesProvider);
+            ref.invalidate(dashboardBudgetsProvider);
+            ref.invalidate(dashboardYouAreOwedProvider);
           },
         );
       },
       data: (List<ExpenseModel> expenses) {
-        return _DashboardContent(expenses: expenses);
+        return _DashboardContent(
+          expenses: expenses,
+          budgetsAsync: budgetsAsync,
+          owedAsync: owedAsync,
+        );
       },
     );
   }
 }
 
 class _DashboardContent extends StatelessWidget {
-  const _DashboardContent({required this.expenses});
+  const _DashboardContent({
+    required this.expenses,
+    required this.budgetsAsync,
+    required this.owedAsync,
+  });
 
   final List<ExpenseModel> expenses;
+  final AsyncValue<List<BudgetModel>> budgetsAsync;
+  final AsyncValue<int> owedAsync;
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme colorScheme = theme.colorScheme;
-
     final DateTime now = DateTime.now();
 
-    final List<ExpenseModel> monthlyExpenses = expenses.where((
-      ExpenseModel expense,
-    ) {
-      final DateTime localDate = expense.occurredAt.toLocal();
+    final DateTime monthStart = DateTime(now.year, now.month);
 
-      return localDate.year == now.year && localDate.month == now.month;
-    }).toList();
+    final DateTime nextMonth = DateTime(now.year, now.month + 1);
+
+    final DateTime today = DateTime(now.year, now.month, now.day);
+
+    final DateTime weekStart = today.subtract(
+      Duration(days: today.weekday - DateTime.monday),
+    );
+
+    final DateTime nextWeek = weekStart.add(const Duration(days: 7));
+
+    final List<ExpenseModel> monthlyExpenses = _expensesInRange(
+      expenses,
+      monthStart,
+      nextMonth,
+    );
+
+    final List<ExpenseModel> weeklyExpenses = _expensesInRange(
+      expenses,
+      weekStart,
+      nextWeek,
+    );
 
     monthlyExpenses.sort((ExpenseModel first, ExpenseModel second) {
       return second.occurredAt.compareTo(first.occurredAt);
     });
 
-    int monthlyTotalMinor = 0;
+    final int monthlySpentMinor = _sumExpenses(monthlyExpenses);
 
-    for (final ExpenseModel expense in monthlyExpenses) {
-      monthlyTotalMinor += expense.amountMinor;
-    }
+    final int weeklySpentMinor = _sumExpenses(weeklyExpenses);
+
+    final _BudgetSnapshot? weeklyBudget = budgetsAsync.when(
+      loading: () => null,
+      error: (Object error, StackTrace stackTrace) => null,
+      data: (List<BudgetModel> budgets) {
+        return _createBudgetSnapshot(
+          budgets: budgets,
+          period: BudgetPeriodType.weekly,
+          spentMinor: weeklySpentMinor,
+        );
+      },
+    );
+
+    final _BudgetSnapshot? monthlyBudget = budgetsAsync.when(
+      loading: () => null,
+      error: (Object error, StackTrace stackTrace) => null,
+      data: (List<BudgetModel> budgets) {
+        return _createBudgetSnapshot(
+          budgets: budgets,
+          period: BudgetPeriodType.monthly,
+          spentMinor: monthlySpentMinor,
+        );
+      },
+    );
+
+    final String owedValue = owedAsync.when(
+      loading: () => 'Loading...',
+      error: (Object error, StackTrace stackTrace) => 'Unavailable',
+      data: (int amountMinor) {
+        return 'PKR ${_formatMoney(amountMinor)}';
+      },
+    );
 
     final List<ExpenseModel> recentExpenses = monthlyExpenses
-        .take(3)
+        .take(5)
         .toList(growable: false);
 
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(28),
       children: <Widget>[
-        Text(
-          'Financial overview',
-          style: theme.textTheme.headlineMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Track your spending, budgets, group balances, '
-          'and financial activity in one place.',
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 24),
-
+        _DashboardHeader(monthName: _monthName(now.month), year: now.year),
+        const SizedBox(height: 26),
         Wrap(
           spacing: 16,
           runSpacing: 16,
           children: <Widget>[
-            _SummaryCard(
+            _KpiCard(
               icon: Icons.payments_outlined,
-              label: 'This month',
-              value: 'PKR ${_formatMoney(monthlyTotalMinor)}',
+              label: 'Spent this month',
+              value: 'PKR ${_formatMoney(monthlySpentMinor)}',
+              caption:
+                  '${monthlyExpenses.length} ${monthlyExpenses.length == 1 ? 'transaction' : 'transactions'}',
             ),
-            const _SummaryCard(
-              icon: Icons.account_balance_wallet_outlined,
-              label: 'Remaining budget',
-              value: 'PKR 0.00',
+            _KpiCard(
+              icon: Icons.calendar_month_outlined,
+              label: 'Monthly remaining',
+              value: _budgetRemainingValue(monthlyBudget),
+              caption: monthlyBudget == null
+                  ? 'No monthly budget'
+                  : _budgetStatusText(monthlyBudget),
             ),
-            const _SummaryCard(
+            _KpiCard(
+              icon: Icons.date_range_outlined,
+              label: 'Weekly remaining',
+              value: _budgetRemainingValue(weeklyBudget),
+              caption: weeklyBudget == null
+                  ? 'No weekly budget'
+                  : _budgetStatusText(weeklyBudget),
+            ),
+            _KpiCard(
               icon: Icons.groups_outlined,
               label: 'You are owed',
-              value: 'PKR 0.00',
+              value: owedValue,
+              caption: 'Across active PKR groups',
             ),
-            _SummaryCard(
+            _KpiCard(
               icon: Icons.receipt_long_outlined,
               label: 'Transactions',
               value: '${monthlyExpenses.length}',
+              caption: 'Current month',
             ),
           ],
         ),
-
-        const SizedBox(height: 32),
-
-        if (monthlyExpenses.isEmpty)
-          const _EmptyState()
-        else ...<Widget>[
-          _MonthlyActivityCard(
-            transactionCount: monthlyExpenses.length,
-            totalMinor: monthlyTotalMinor,
+        const SizedBox(height: 30),
+        Text(
+          'Budget health',
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'See how your current spending compares with your limits.',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
-          const SizedBox(height: 24),
-          Text(
-            'Recent expenses',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
+        ),
+        const SizedBox(height: 16),
+        LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final bool wide = constraints.maxWidth >= 900;
+
+            if (wide) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(
+                    child: _BudgetProgressCard(
+                      title: 'Weekly budget',
+                      periodLabel: _weekRangeLabel(
+                        weekStart,
+                        nextWeek.subtract(const Duration(days: 1)),
+                      ),
+                      snapshot: weeklyBudget,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _BudgetProgressCard(
+                      title: 'Monthly budget',
+                      periodLabel: '${_monthName(now.month)} ${now.year}',
+                      snapshot: monthlyBudget,
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            return Column(
+              children: <Widget>[
+                _BudgetProgressCard(
+                  title: 'Weekly budget',
+                  periodLabel: _weekRangeLabel(
+                    weekStart,
+                    nextWeek.subtract(const Duration(days: 1)),
+                  ),
+                  snapshot: weeklyBudget,
+                ),
+                const SizedBox(height: 16),
+                _BudgetProgressCard(
+                  title: 'Monthly budget',
+                  periodLabel: '${_monthName(now.month)} ${now.year}',
+                  snapshot: monthlyBudget,
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 30),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                'Recent expenses',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
+            Text(
+              'This month',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        if (recentExpenses.isEmpty)
+          const _EmptyRecentExpenses()
+        else
           Card(
-            clipBehavior: Clip.antiAlias,
             child: Column(
               children: <Widget>[
                 for (
@@ -167,82 +380,283 @@ class _DashboardContent extends StatelessWidget {
               ],
             ),
           ),
-        ],
       ],
     );
   }
 }
 
-class _MonthlyActivityCard extends StatelessWidget {
-  const _MonthlyActivityCard({
-    required this.transactionCount,
-    required this.totalMinor,
-  });
+class _DashboardHeader extends StatelessWidget {
+  const _DashboardHeader({required this.monthName, required this.year});
 
-  final int transactionCount;
-  final int totalMinor;
+  final String monthName;
+  final int year;
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme colorScheme = theme.colorScheme;
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    return Wrap(
+      spacing: 16,
+      runSpacing: 12,
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: <Widget>[
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Financial overview',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'A clear view of spending, budgets and shared balances.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
+            ),
+          ],
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            border: Border.all(color: colors.outlineVariant),
+            borderRadius: BorderRadius.circular(10),
+            color: colors.surface,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                Icons.calendar_today_outlined,
+                size: 18,
+                color: colors.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '$monthName $year',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _KpiCard extends StatelessWidget {
+  const _KpiCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.caption,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final String caption;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      width: 236,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: colors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, size: 21, color: colors.primary),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                label,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                caption,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BudgetProgressCard extends StatelessWidget {
+  const _BudgetProgressCard({
+    required this.title,
+    required this.periodLabel,
+    required this.snapshot,
+  });
+
+  final String title;
+  final String periodLabel;
+  final _BudgetSnapshot? snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    final _BudgetSnapshot? current = snapshot;
+
+    if (current == null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(22),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: colors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: colors.primary,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$periodLabel • No budget configured',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final Color statusColor = _budgetStatusColor(current);
+
+    final double progressValue = current.ratio.clamp(0.0, 1.0).toDouble();
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Row(
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Container(
-              width: 54,
-              height: 54,
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(
-                Icons.insights_outlined,
-                color: colorScheme.onPrimaryContainer,
-              ),
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Monthly activity',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '$transactionCount '
-                    '${transactionCount == 1 ? 'transaction' : 'transactions'} '
-                    'recorded this month.',
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 24),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            Row(
               children: <Widget>[
-                Text(
-                  'Total spending',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        periodLabel,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'PKR ${_formatMoney(totalMinor)}',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.primary,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _budgetStatusText(current),
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
+            LinearProgressIndicator(
+              value: progressValue,
+              minHeight: 9,
+              color: statusColor,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: _BudgetMetric(
+                    label: 'Spent',
+                    value: 'PKR ${_formatMoney(current.spentMinor)}',
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _BudgetMetric(
+                    label: 'Budget',
+                    value: 'PKR ${_formatMoney(current.budgetMinor)}',
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _BudgetMetric(
+                    label: current.remainingMinor >= 0
+                        ? 'Remaining'
+                        : 'Over budget',
+                    value: 'PKR ${_formatMoney(current.remainingMinor.abs())}',
                   ),
                 ),
               ],
@@ -254,6 +668,39 @@ class _MonthlyActivityCard extends StatelessWidget {
   }
 }
 
+class _BudgetMetric extends StatelessWidget {
+  const _BudgetMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          label,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+        ),
+      ],
+    );
+  }
+}
+
 class _RecentExpenseTile extends StatelessWidget {
   const _RecentExpenseTile({required this.expense});
 
@@ -261,114 +708,79 @@ class _RecentExpenseTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final DateTime date = expense.occurredAt.toLocal();
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    final DateTime localDate = expense.occurredAt.toLocal();
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-      leading: const CircleAvatar(child: Icon(Icons.receipt_long_outlined)),
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: colors.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: Icon(
+          Icons.receipt_long_outlined,
+          size: 20,
+          color: colors.primary,
+        ),
+      ),
       title: Text(
         expense.title,
         style: const TextStyle(fontWeight: FontWeight.w600),
       ),
-      subtitle: Text(_formatDate(date)),
+      subtitle: Text(_formatDate(localDate)),
       trailing: Text(
         'PKR ${_formatMoney(expense.amountMinor)}',
         style: Theme.of(
           context,
-        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
       ),
     );
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+class _EmptyRecentExpenses extends StatelessWidget {
+  const _EmptyRecentExpenses();
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme colorScheme = theme.colorScheme;
+    final ColorScheme colors = Theme.of(context).colorScheme;
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(28),
         child: Row(
           children: <Widget>[
             Icon(
               Icons.receipt_long_outlined,
-              size: 42,
-              color: colorScheme.primary,
+              size: 38,
+              color: colors.onSurfaceVariant,
             ),
-            const SizedBox(width: 20),
+            const SizedBox(width: 18),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    'No expenses recorded this month',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
+                    'No expenses this month',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 5),
                   Text(
-                    'Add your first expense to start '
-                    'tracking spending and analytics.',
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+                    'New personal expenses will appear here automatically.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colors.onSurfaceVariant,
                     ),
                   ),
                 ],
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme colorScheme = theme.colorScheme;
-
-    return SizedBox(
-      width: 230,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Icon(icon, color: colorScheme.primary),
-              const SizedBox(height: 20),
-              Text(
-                value,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -385,31 +797,145 @@ class _DashboardErrorState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            const Icon(Icons.error_outline, size: 48),
-            const SizedBox(height: 16),
-            Text(
-              'Unable to load dashboard',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+        padding: const EdgeInsets.all(28),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const Icon(Icons.error_outline, size: 46),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Unable to load overview',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(message, textAlign: TextAlign.center),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
+}
+
+class _BudgetSnapshot {
+  const _BudgetSnapshot({required this.budgetMinor, required this.spentMinor});
+
+  final int budgetMinor;
+  final int spentMinor;
+
+  int get remainingMinor {
+    return budgetMinor - spentMinor;
+  }
+
+  double get ratio {
+    if (budgetMinor <= 0) {
+      return 0;
+    }
+
+    return spentMinor / budgetMinor;
+  }
+}
+
+_BudgetSnapshot? _createBudgetSnapshot({
+  required List<BudgetModel> budgets,
+  required BudgetPeriodType period,
+  required int spentMinor,
+}) {
+  for (final BudgetModel budget in budgets) {
+    if (budget.periodType == period &&
+        budget.deletedAt == null &&
+        budget.isActive &&
+        budget.currencyCode.toUpperCase() == 'PKR') {
+      return _BudgetSnapshot(
+        budgetMinor: budget.amountMinor,
+        spentMinor: spentMinor,
+      );
+    }
+  }
+
+  return null;
+}
+
+List<ExpenseModel> _expensesInRange(
+  List<ExpenseModel> expenses,
+  DateTime start,
+  DateTime endExclusive,
+) {
+  return expenses.where((ExpenseModel expense) {
+    final DateTime occurredAt = expense.occurredAt.toLocal();
+
+    return !occurredAt.isBefore(start) && occurredAt.isBefore(endExclusive);
+  }).toList();
+}
+
+int _sumExpenses(List<ExpenseModel> expenses) {
+  int total = 0;
+
+  for (final ExpenseModel expense in expenses) {
+    total += expense.amountMinor;
+  }
+
+  return total;
+}
+
+String _budgetRemainingValue(_BudgetSnapshot? snapshot) {
+  if (snapshot == null) {
+    return 'Not set';
+  }
+
+  if (snapshot.remainingMinor < 0) {
+    return 'PKR ${_formatMoney(snapshot.remainingMinor.abs())} over';
+  }
+
+  return 'PKR ${_formatMoney(snapshot.remainingMinor)}';
+}
+
+String _budgetStatusText(_BudgetSnapshot snapshot) {
+  if (snapshot.ratio >= 1.0) {
+    return 'Over budget';
+  }
+
+  if (snapshot.ratio >= 0.90) {
+    return 'Almost used';
+  }
+
+  if (snapshot.ratio >= 0.70) {
+    return 'Watch spending';
+  }
+
+  return 'On track';
+}
+
+Color _budgetStatusColor(_BudgetSnapshot snapshot) {
+  if (snapshot.ratio >= 0.90) {
+    return AppColors.danger;
+  }
+
+  if (snapshot.ratio >= 0.70) {
+    return AppColors.warning;
+  }
+
+  return AppColors.positive;
+}
+
+String _weekRangeLabel(DateTime start, DateTime end) {
+  return '${start.day} ${_shortMonthName(start.month)} – '
+      '${end.day} ${_shortMonthName(end.month)} ${end.year}';
 }
 
 String _formatDate(DateTime date) {
@@ -420,6 +946,7 @@ String _formatDate(DateTime date) {
 
 String _formatMoney(int amountMinor) {
   final bool negative = amountMinor < 0;
+
   final int absolute = amountMinor.abs();
 
   final int whole = absolute ~/ 100;
@@ -446,4 +973,42 @@ String _addThousandsSeparators(String digits) {
   }
 
   return buffer.toString();
+}
+
+String _monthName(int month) {
+  const List<String> months = <String>[
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  return months[month - 1];
+}
+
+String _shortMonthName(int month) {
+  const List<String> months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  return months[month - 1];
 }
