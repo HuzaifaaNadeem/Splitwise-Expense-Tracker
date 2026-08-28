@@ -1,38 +1,62 @@
 <div align="center">
 
-<img src="assets/icon/app_icon.png" alt="Splitwise Expense Tracker" width="96" />
+<img src="assets/icon/app_icon.png" alt="Splitwise Expense Tracker" width="88" />
 
 Splitwise Expense Tracker
 
-Offline-first personal finance and shared expense management built with Flutter.
+A modern, offline-first expense management app built with Flutter.
 
-<p>
-Flutter · Riverpod · Isar Community · Material 3 · fl_chart · PDF Reports
-</p>
+Personal finance, budgets, analytics, shared expenses, settlements, and PDF reporting — all in one clean cross-platform application.
+
+<br/>
+
+<img alt="Flutter" src="https://img.shields.io/badge/Flutter-3.x-02569B?style=flat-square&logo=flutter&logoColor=white" />
+<img alt="Dart" src="https://img.shields.io/badge/Dart-3.x-0175C2?style=flat-square&logo=dart&logoColor=white" />
+<img alt="Riverpod" src="https://img.shields.io/badge/State-Riverpod-5B5BD6?style=flat-square" />
+<img alt="Isar" src="https://img.shields.io/badge/Storage-Isar-6B4EFF?style=flat-square" />
+<img alt="Version" src="https://img.shields.io/badge/Version-1.0.0-222222?style=flat-square" />
 
 </div>
 
-Overview
+About
 
-Splitwise Expense Tracker is a cross-platform finance application for managing personal expenses, budgets, analytics, shared group expenses, balances, settlements, and PDF reports.
+Splitwise Expense Tracker is a production-oriented Flutter application for managing both personal and shared finances.
 
-The app is designed around an offline-first architecture with local persistence, clean separation of concerns, and a responsive Material 3 interface for desktop and mobile.
+It combines:
 
-Features
+personal expense tracking
 
-Personal finance
+weekly and monthly budgets
+
+financial analytics
+
+shared group expenses
+
+balance and settlement calculations
+
+PDF reports
+
+persistent multi-currency defaults
+
+offline local storage
+
+The project is structured using Feature-First Clean Architecture and uses Riverpod for state management and Isar Community for persistence.
+
+Core Features
+
+Personal Finance
 
 Add, edit, and delete expenses
 
-Search, filter, and sort transactions
+Organize transactions by category
 
-Category-based expense organization
+Search and filter expense history
 
-Weekly and monthly budgets
+Sort by date or amount
+
+Weekly and monthly budget tracking
 
 Budget progress and warning thresholds
-
-Persistent local storage
 
 Analytics
 
@@ -44,15 +68,17 @@ Category spending breakdown
 
 Monthly net position
 
-Currency-isolated analytics
+Currency-aware reporting
 
-Shared expenses
+Shared Expenses
 
-Create groups and manage members
+Create and manage groups
 
-Add shared expenses
+Add and remove members
 
-Equal-split calculations
+Record shared expenses
+
+Equal split calculations
 
 Net balance calculation
 
@@ -62,106 +88,23 @@ Partial and full settlement payments
 
 Settlement history
 
-Archive or delete groups
-
 Reports
 
 Generate group PDF reports
 
-Include members, expenses, balances, and settlement suggestions
+Export members, expenses, balances, and settlement suggestions
 
-Settings
+Multi-Currency Support
 
-Persistent default currency
-
-Light / dark / system theme
-
-Budget and category management
-
-Local data location
-
-PDF report access
-
-Supported Currencies
+Supported default currencies:
 
 PKR · USD · GBP · EUR · AED · SAR
 
-The selected default currency is used for new records.
+The selected currency is used for new records and filtered financial views.
 
-Existing expenses, budgets, groups, and settlements keep their original stored currency values. No automatic FX conversion is performed.
+Existing transactions retain their original stored currency, so historical values are never silently relabeled or converted.
 
-Screenshots
-
-<div align="center">
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="docs/screenshots/overview.png" width="390" alt="Overview" /><br/>
-      <sub>Overview</sub>
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/expenses.png" width="390" alt="Expenses" /><br/>
-      <sub>Expenses</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="docs/screenshots/analytics.png" width="390" alt="Analytics" /><br/>
-      <sub>Analytics</sub>
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/groups.png" width="390" alt="Groups" /><br/>
-      <sub>Groups</sub>
-    </td>
-  </tr>
-</table>
-
-</div>
-
-Place screenshots in docs/screenshots/ using the filenames above.
-
-Tech Stack
-
-Category
-
-Technology
-
-Framework
-
-Flutter
-
-Language
-
-Dart
-
-State management
-
-Riverpod
-
-Local database
-
-Isar Community
-
-Charts
-
-fl_chart
-
-PDF
-
-pdf + printing
-
-UI
-
-Material 3
-
-Architecture
-
-Feature-First Clean Architecture
-
-Testing
-
-flutter_test + integration_test
+Live exchange-rate conversion is intentionally not included in v1.0.
 
 Architecture
 
@@ -188,25 +131,95 @@ lib/
 packages/
 └── local_database/
 
-The project separates presentation, domain, and data responsibilities so business logic remains testable and persistence stays isolated from UI code.
+The architecture keeps business logic, persistence, and UI responsibilities separated and testable.
 
-Money Handling
+Tech Stack
 
-All monetary calculations use integer minor units instead of floating-point arithmetic.
+Area
+
+Technology
+
+Framework
+
+Flutter
+
+Language
+
+Dart
+
+State Management
+
+Riverpod
+
+Local Database
+
+Isar Community
+
+Charts
+
+fl_chart
+
+PDF
+
+pdf + printing
+
+UI
+
+Material 3
+
+Architecture
+
+Feature-First Clean Architecture
+
+Testing
+
+flutter_test + integration_test
+
+Financial Logic
+
+All monetary calculations use integer minor units to avoid floating-point precision issues.
 
 Example:
 
 PKR 3,000 paid by A
-Split between A, B, C
+Split between A, B, and C
+
+Balances:
 
 A  +PKR 2,000
 B  -PKR 1,000
 C  -PKR 1,000
 
-Suggested settlement:
+Suggested settlements:
 
 B -> A  PKR 1,000
 C -> A  PKR 1,000
+
+Interface
+
+The app uses a responsive Material 3 layout.
+
+Desktop
+
+left navigation
+
+KPI-based overview
+
+responsive tables and cards
+
+dedicated settings workspace
+
+Mobile
+
+bottom navigation
+
+compact responsive cards
+
+scroll-safe forms
+
+touch-friendly actions
+
+The interface supports light, dark, and system appearance modes.
 
 Getting Started
 
@@ -245,37 +258,36 @@ flutter analyze
 flutter test -j 1
 flutter test integration_test/app_test.dart
 
-The integration test covers the main shared-expense flow:
+The integration test verifies the main shared-expense flow:
 
 Launch
--> Groups
--> Create Group
--> Group Details
--> Add Shared Expense
--> Save
--> Verify Transaction
+→ Open Groups
+→ Create Group
+→ Add Shared Expense
+→ Save
+→ Verify Transaction
 
 Project Status
 
-Version 1.0.0
+v1.0.0
 
 Core functionality is complete and tested.
 
-Planned Improvements
+Roadmap
 
 Exact split UI
 
 Percentage split UI
 
-Weighted share split UI
+Weighted split UI
 
 Encrypted backup and restore
 
 CSV / spreadsheet export
 
-Cloud sync
-
 Authentication
+
+Cloud synchronization
 
 Live FX conversion
 
@@ -283,7 +295,7 @@ Multi-device sync
 
 License
 
-Choose a license before public or commercial distribution.
+Add the appropriate license before public or commercial distribution.
 
 <div align="center">
 
