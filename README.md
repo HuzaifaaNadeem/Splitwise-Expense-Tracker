@@ -1,113 +1,89 @@
-<div align="center">
+# Splitwise Expense Tracker
 
-<img src="assets/icon/app_icon.png" alt="Splitwise Expense Tracker" width="88" />
+A clean, offline-first expense management application built with Flutter and Dart.
 
-Splitwise Expense Tracker
+It supports personal expense tracking, budgets, analytics, shared group expenses, balance calculation, settlement suggestions, PDF reports, and multiple default currencies. The project is built with a focus on maintainable architecture, local-first data storage, responsive UI, and automated testing.
 
-A modern, offline-first expense management app built with Flutter.
+---
 
-Personal finance, budgets, analytics, shared expenses, settlements, and PDF reporting — all in one clean cross-platform application.
+## Features
 
-<br/>
+### Personal Expenses
+- Add, edit, and delete expenses
+- Search and filter transactions
+- Sort by date or amount
+- Organize expenses by category
+- Weekly and monthly budget tracking
+- Budget progress and warning levels
 
-<img alt="Flutter" src="https://img.shields.io/badge/Flutter-3.x-02569B?style=flat-square&logo=flutter&logoColor=white" />
-<img alt="Dart" src="https://img.shields.io/badge/Dart-3.x-0175C2?style=flat-square&logo=dart&logoColor=white" />
-<img alt="Riverpod" src="https://img.shields.io/badge/State-Riverpod-5B5BD6?style=flat-square" />
-<img alt="Isar" src="https://img.shields.io/badge/Storage-Isar-6B4EFF?style=flat-square" />
-<img alt="Version" src="https://img.shields.io/badge/Version-1.0.0-222222?style=flat-square" />
+### Analytics
+- Weekly and monthly spending summaries
+- Income vs expense comparison
+- Category spending breakdown
+- Monthly net position
+- Currency-aware analytics
 
-</div>
+### Shared Expenses
+- Create groups
+- Add and remove members
+- Add shared expenses
+- Equal split calculation
+- Net balance calculation
+- Debt settlement suggestions
+- Partial and full settlement payments
+- Settlement history
+- Archive and delete groups
 
-About
+### Reports
+- Generate PDF reports for groups
+- Export group members, expenses, balances, and settlement suggestions
 
-Splitwise Expense Tracker is a production-oriented Flutter application for managing both personal and shared finances.
+### Settings
+- Default currency selection
+- Light, dark, and system theme
+- Budget and category management
+- Local data location
+- Group report access
 
-It combines:
+---
 
-personal expense tracking
+## Supported Currencies
 
-weekly and monthly budgets
+The app currently supports the following default currencies:
 
-financial analytics
+- PKR
+- USD
+- GBP
+- EUR
+- AED
+- SAR
 
-shared group expenses
+Changing the default currency affects new records and filtered views.
 
-balance and settlement calculations
+Existing expenses, budgets, groups, and settlements keep their original stored currency values. The app does not perform live currency conversion.
 
-PDF reports
+---
 
-persistent multi-currency defaults
+## Tech Stack
 
-offline local storage
+- Flutter
+- Dart
+- Riverpod
+- Isar Community
+- Material 3
+- fl_chart
+- pdf
+- printing
+- flutter_test
+- integration_test
 
-The project is structured using Feature-First Clean Architecture and uses Riverpod for state management and Isar Community for persistence.
+---
 
-Core Features
+## Architecture
 
-Personal Finance
+The project follows Feature-First Clean Architecture.
 
-Add, edit, and delete expenses
-
-Organize transactions by category
-
-Search and filter expense history
-
-Sort by date or amount
-
-Weekly and monthly budget tracking
-
-Budget progress and warning thresholds
-
-Analytics
-
-Weekly and monthly summaries
-
-Income vs expense comparison
-
-Category spending breakdown
-
-Monthly net position
-
-Currency-aware reporting
-
-Shared Expenses
-
-Create and manage groups
-
-Add and remove members
-
-Record shared expenses
-
-Equal split calculations
-
-Net balance calculation
-
-Debt settlement suggestions
-
-Partial and full settlement payments
-
-Settlement history
-
-Reports
-
-Generate group PDF reports
-
-Export members, expenses, balances, and settlement suggestions
-
-Multi-Currency Support
-
-Supported default currencies:
-
-PKR · USD · GBP · EUR · AED · SAR
-
-The selected currency is used for new records and filtered financial views.
-
-Existing transactions retain their original stored currency, so historical values are never silently relabeled or converted.
-
-Live exchange-rate conversion is intentionally not included in v1.0.
-
-Architecture
-
+```text
 lib/
 ├── app/
 ├── core/
@@ -130,175 +106,250 @@ lib/
 
 packages/
 └── local_database/
+```
 
-The architecture keeps business logic, persistence, and UI responsibilities separated and testable.
+This structure keeps presentation, business logic, and persistence responsibilities separated and easier to test and maintain.
 
-Tech Stack
+---
 
-Area
+## Money Handling
 
-Technology
-
-Framework
-
-Flutter
-
-Language
-
-Dart
-
-State Management
-
-Riverpod
-
-Local Database
-
-Isar Community
-
-Charts
-
-fl_chart
-
-PDF
-
-pdf + printing
-
-UI
-
-Material 3
-
-Architecture
-
-Feature-First Clean Architecture
-
-Testing
-
-flutter_test + integration_test
-
-Financial Logic
-
-All monetary calculations use integer minor units to avoid floating-point precision issues.
+All monetary values are stored and calculated using integer minor units instead of floating-point values.
 
 Example:
 
+```text
 PKR 3,000 paid by A
 Split between A, B, and C
+```
 
 Balances:
 
+```text
 A  +PKR 2,000
 B  -PKR 1,000
 C  -PKR 1,000
+```
 
 Suggested settlements:
 
+```text
 B -> A  PKR 1,000
 C -> A  PKR 1,000
+```
 
-Interface
+This approach avoids common floating-point precision problems in financial calculations.
 
-The app uses a responsive Material 3 layout.
+---
 
-Desktop
+## Screenshots
 
-left navigation
+Add screenshots to:
 
-KPI-based overview
+```text
+docs/screenshots/
+```
 
-responsive tables and cards
+Recommended screenshots:
 
-dedicated settings workspace
+- Overview
+- Expenses
+- Analytics
+- Groups
+- Group Details
+- Settings
+- Dark Mode
 
-Mobile
+Example paths:
 
-bottom navigation
+```text
+docs/screenshots/overview.png
+docs/screenshots/expenses.png
+docs/screenshots/analytics.png
+docs/screenshots/groups.png
+docs/screenshots/group-details.png
+docs/screenshots/settings.png
+```
 
-compact responsive cards
+---
 
-scroll-safe forms
+## Getting Started
 
-touch-friendly actions
+### Prerequisites
 
-The interface supports light, dark, and system appearance modes.
+Make sure Flutter is installed:
 
-Getting Started
+```bash
+flutter doctor
+```
 
-Clone
+### Clone the repository
 
+```bash
 git clone https://github.com/HuzaifaaNadeem/Splitwise-Expense-Tracker.git
 cd Splitwise-Expense-Tracker
+```
 
-Install dependencies
+### Install dependencies
 
+```bash
 flutter pub get
+```
 
-Riverpod code generation
+---
 
+## Code Generation
+
+### Riverpod
+
+Run from the project root:
+
+```bash
 dart run build_runner build --delete-conflicting-outputs
+```
 
-Isar code generation
+### Isar
 
+Run inside the local database package:
+
+```bash
 cd packages/local_database
 dart run build_runner build --delete-conflicting-outputs
 cd ../..
+```
 
-Run
+---
 
-Windows
+## Run the App
 
+### Windows
+
+```bash
 flutter run -d windows
+```
 
-Android
+### Android
 
+```bash
 flutter run
+```
 
-Testing
+To view available devices:
 
+```bash
+flutter devices
+```
+
+---
+
+## Testing
+
+Run static analysis:
+
+```bash
+flutter analyze
+```
+
+Run unit, repository, and widget tests:
+
+```bash
+flutter test -j 1
+```
+
+Run the integration test:
+
+```bash
+flutter test integration_test/app_test.dart
+```
+
+The integration test covers the main shared-expense flow:
+
+```text
+Launch app
+-> Open Groups
+-> Create Group
+-> Open Group Details
+-> Add Shared Expense
+-> Save
+-> Verify Transaction
+```
+
+---
+
+## Project Status
+
+Version: **1.0.0**
+
+Current status:
+
+- Core functionality complete
+- Unit tests passing
+- Repository tests passing
+- Widget tests passing
+- Integration test passing
+- Windows runtime verified
+
+---
+
+## Roadmap
+
+Possible future improvements:
+
+- Exact split UI
+- Percentage split UI
+- Weighted split UI
+- Encrypted backup and restore
+- CSV export
+- Spreadsheet export
+- Authentication
+- Cloud sync
+- Live FX conversion
+- Multi-device sync
+- Recurring expenses
+- Notifications
+
+---
+
+## Professional Review Checklist
+
+For a polished portfolio or recruiter review, make sure the repository includes:
+
+- A clear README
+- Clean project structure
+- Screenshots
+- Passing tests
+- Meaningful Git commit history
+- A release tag
+- A license
+- No secrets or local environment files
+- A working release build
+- Consistent formatting and linting
+
+Before sharing the repository, run:
+
+```bash
+dart format lib test integration_test
 flutter analyze
 flutter test -j 1
 flutter test integration_test/app_test.dart
+```
 
-The integration test verifies the main shared-expense flow:
+---
 
-Launch
-→ Open Groups
-→ Create Group
-→ Add Shared Expense
-→ Save
-→ Verify Transaction
+## License
 
-Project Status
+Choose and add a suitable license before public or commercial distribution.
 
-v1.0.0
+Common open-source options include:
 
-Core functionality is complete and tested.
+- MIT
+- Apache 2.0
+- GPLv3
 
-Roadmap
+For proprietary use, use an appropriate commercial license instead.
 
-Exact split UI
+---
 
-Percentage split UI
+## Repository
 
-Weighted split UI
-
-Encrypted backup and restore
-
-CSV / spreadsheet export
-
-Authentication
-
-Cloud synchronization
-
-Live FX conversion
-
-Multi-device sync
-
-License
-
-Add the appropriate license before public or commercial distribution.
-
-<div align="center">
-
-Built with Flutter · Offline-first · Clean Architecture
-
-</div>
+https://github.com/HuzaifaaNadeem/Splitwise-Expense-Tracker
